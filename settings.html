@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>Ayarlar</title>
+<style>
+  body { margin:0; padding:26px 28px 32px; background:#14121a; color:#f3eef8; font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; user-select:none; }
+  h1 { font-size:20px; margin:0 0 6px; font-weight:650; }
+  h2 { font-size:13px; font-weight:600; color:#b9b0c8; margin:26px 0 10px; }
+  #sw { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+  .sw { width:36px; height:36px; border-radius:50%; border:3px solid transparent; cursor:pointer; transition:transform .25s cubic-bezier(.34,1.5,.5,1); }
+  .sw:hover { transform:scale(1.12); } .sw.on { border-color:#fff; }
+  .opt { display:flex; gap:12px; align-items:flex-start; padding:11px 14px; margin-bottom:8px; border-radius:14px; background:#1f1c29; cursor:pointer; border:1px solid transparent; transition:border-color .2s, background .2s; }
+  .opt:hover { background:#262233; } .opt:has(input:checked) { border-color:#ffc2d9; }
+  .opt input { margin-top:3px; accent-color:#ffadcc; }
+  .opt b { display:block; font-size:14px; font-weight:600; } .opt span { font-size:12.5px; color:#b9b0c8; line-height:1.4; }
+  .row2 { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 2px 10px; font-size:14px; } .row2.col { flex-direction:column; align-items:stretch; gap:8px; }
+  .row2 input[type=range] { width:190px; accent-color:#ffadcc; }
+  textarea { resize:vertical; }
+  select, input[type=text], input[type=time], input[type=date], textarea { background:#1f1c29; color:#f3eef8; border:1px solid #332f42; border-radius:10px; padding:8px 10px; font:inherit; font-size:13px; }
+  input[type=color] { width:44px; height:32px; padding:0; border:1px solid #332f42; border-radius:10px; background:#1f1c29; cursor:pointer; }
+  .seg { display:flex; gap:8px; } .seg label { flex:1; cursor:pointer; } .seg input { display:none; }
+  .seg span { display:block; text-align:center; padding:10px; border-radius:12px; background:#1f1c29; font-size:13px; border:1px solid transparent; transition:border-color .2s, background .2s; }
+  .seg input:checked + span { border-color:#ffc2d9; background:#262233; }
+  .btn { margin-top:12px; width:100%; padding:11px; border:0; border-radius:14px; background:#1f1c29; color:#f3eef8; font:inherit; font-weight:600; cursor:pointer; } .btn:hover { background:#262233; }
+  #test { margin-top:20px; background:#ffc2d9; color:#2a1a24; font-weight:650; } #test:hover { background:#ffd1e2; }
+  small { color:#b9b0c8; font-size:12px; line-height:1.4; display:block; margin:-2px 2px 10px; }
+</style></head><body>
+<h1>Dynamic Bar ayarları</h1><div id="root"></div>
+<button id="test" class="btn">Test bildirimi gönder</button>
+<button id="exp" class="btn">Ayarları panoya kopyala (yedek)</button>
+<button id="imp" class="btn">Panodan ayarları yükle</button>
+<button id="reset" class="btn">Tüm ayarları varsayılana döndür</button>
+<script src="palette.js"></script>
+<script>
+(async () => {
+  const root = document.getElementById('root');
+  const T = (k, b, s) => `<label class="opt"><input type="checkbox" data-k="${k}"><div><b>${b}</b><span>${s}</span></div></label>`;
+  const R = (k, v, b, s) => `<label class="opt"><input type="radio" name="${k}" value="${v}" data-k="${k}"><div><b>${b}</b><span>${s}</span></div></label>`;
+  const S = (k, b, o, num) => `<label class="row2"><b>${b}</b><select data-k="${k}"${num ? ' data-num' : ''}>${o.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></label>`;
+  const G = (k, b, min, max, step) => `<label class="row2"><b>${b}</b><input type="range" data-k="${k}" data-num min="${min}" max="${max}" step="${step}"></label>`;
+  const X = (k, b, ph) => `<label class="row2 col"><b>${b}</b><input type="text" data-k="${k}" placeholder="${ph || ''}"></label>`;
+  const Tm = (k, b) => `<label class="row2"><b>${b}</b><input type="time" data-k="${k}"></label>`;
+  const H = (t) => `<h2>${t}</h2>`;
+  const disp = await dynbar.invoke('displays');
+  root.innerHTML =
+    H('Maskot') + '<div id="sw"></div>' +
+    '<label class="row2"><b>Özel renk</b><span><input type="color" data-k="accent" id="accent"> <button class="btn" id="accclr" style="width:auto;margin:0 0 0 6px;padding:7px 12px">Paletten seç</button></span></label>' +
+    S('character', 'Karakter', [['cat', 'Kedi'], ['fox', 'Tilki'], ['bunny', 'Tavşan'], ['bear', 'Ayı'], ['mouse', 'Fare'], ['dog', 'Köpek'], ['blob', 'Yumak (kulaksız)']]) +
+    S('accessory', 'Aksesuar', [['none', 'Yok'], ['bow', 'Fiyonk'], ['hat', 'Parti şapkası'], ['glasses', 'Gözlük'], ['crown', 'Taç'], ['headphones', 'Kulaklık'], ['star', 'Yıldız']]) +
+    T('eyes', 'Gözler fareyi takip etsin', 'Fare barın yakınındayken maskot sana bakar.') +
+    T('pet', 'Tıklayınca sevilsin', 'Maskota tıklamak kalp çıkarır. Panel yine açılır.') +
+    H('Görünüm') +
+    S('uiScale', 'Boyut', [['0.85', 'Küçük'], ['1', 'Normal'], ['1.15', 'Büyük'], ['1.3', 'Çok büyük']], true) +
+    G('offsetY', 'Üstten boşluk (yüzen mod)', 0, 40, 2) +
+    S('bg', 'Arka plan rengi', [['black', 'Siyah'], ['graphite', 'Grafit'], ['midnight', 'Gece mavisi'], ['plum', 'Mürdüm'], ['forest', 'Orman']]) +
+    G('bgAlpha', 'Arka plan opaklığı (%)', 50, 100, 5) +
+    S('shadow', 'Gölge', [['none', 'Yok'], ['soft', 'Yumuşak (önerilen)'], ['normal', 'Belirgin']]) +
+    S('anim', 'Animasyonlar', [['spring', 'Yaylı'], ['smooth', 'Sakin'], ['off', 'Kapalı']]) +
+    H('Konum ve davranış') +
+    R('mode', 'float', 'Yüzen', 'Her zaman üstte durur. Sadece barın kendisi tıklanır, geri kalan alan arkadaki uygulamalara geçer.') +
+    R('mode', 'desktop', 'Sadece masaüstünde', 'Yalnızca masaüstü görünürken (Win+D, 4 parmak hareketi) görünür, bir uygulama açılınca gizlenir. Bildirim gelince kısa süre belirir.') +
+    R('mode', 'dock', 'Üste yapışık', 'Ekranın üst kenarına oturur, çentik gibi durur. Her zaman üstte kalır.') +
+    S('display', 'Gösterilecek ekran', disp, true) +
+    S('openOn', 'Paneli aç', [['click', 'Tıklayınca'], ['hover', 'Üzerine gelince']]) +
+    S('closeDelay', 'Panel kendiliğinden kapansın', [['0', 'Hiç'], ['2', '2 sn'], ['3.5', '3.5 sn'], ['6', '6 sn'], ['10', '10 sn']], true) +
+    S('sleepAfter', 'Maskot uyusun', [['0', 'Hiç'], ['10', '10 sn'], ['20', '20 sn'], ['60', '1 dk'], ['300', '5 dk']], true) +
+    S('ttlScale', 'Bildirim süresi', [['0.6', 'Kısa'], ['1', 'Normal'], ['1.5', 'Uzun'], ['2', 'Çok uzun']], true) +
+    T('startupToast', 'Açılışta selam ver', 'Uygulama başlayınca küçük bir karşılama bildirimi gösterir.') +
+    T('hideFullscreen', 'Tam ekranda gizle', 'Oyun veya tam ekran video açıkken bar kendini gizler.') +
+    T('autostart', 'Windows ile başlat', 'Oturum açınca Dynamic Bar kendiliğinden açılır.') +
+    X('panelKey', 'Paneli aç/kapat kısayolu', 'Control+Alt+B') + X('testKey', 'Test bildirimi kısayolu', 'Control+Alt+N') +
+    '<small>Örnek: Control+Alt+B, Alt+Shift+D. Bar tıklanmazsa bu kısayol paneli yine açar.</small>' +
+    H('Panel sayfaları') +
+    T('pageMedia', 'Medya', 'Çalan parça, kapak ve oynatma kontrolleri.') +
+    T('artOnline', 'Eksik kapakları internetten bul', 'Sistem kapak vermezse parça adı iTunes araması ile sorgulanır. Kapalıyken hiçbir şey dışarı gönderilmez.') +
+    T('pageSystem', 'Sistem', 'CPU, RAM, pil ve ağ hızı.') +
+    T('pageClipboard', 'Pano geçmişi', 'Son kopyalanan 8 metin, yalnızca bellekte tutulur. Parolalar da dahil her kopyalanan görünür, bu yüzden varsayılan kapalı.') +
+    T('pagePomodoro', 'Pomodoro', 'Odak ve mola döngüsü; süreleri aşağıdan ayarla.') +
+    S('pomoFocus', 'Odak süresi', [['15', '15 dk'], ['25', '25 dk'], ['35', '35 dk'], ['45', '45 dk'], ['50', '50 dk']], true) +
+    S('pomoBreak', 'Mola süresi', [['3', '3 dk'], ['5', '5 dk'], ['10', '10 dk']], true) +
+    S('pomoLong', 'Uzun mola', [['10', '10 dk'], ['15', '15 dk'], ['20', '20 dk'], ['30', '30 dk']], true) +
+    S('pomoRounds', 'Uzun mola kaç turda bir', [['2', '2'], ['3', '3'], ['4', '4'], ['6', '6']], true) +
+    T('pageStopwatch', 'Kronometre', 'Başlat, durdur, sıfırla.') +
+    X('timerPresets', 'Zamanlayıcı düğmeleri (dakika, virgülle, en fazla 5)', '1,5,10,25') +
+    T('pageCalendar', 'Takvim', 'Sıradaki etkinlik ve 5 dakika kala bildirim. Günlük/haftalık tekrarlar desteklenir.') +
+    X('icsUrl', 'Takvim ICS adresi', 'https://calendar.google.com/…/basic.ics') +
+    T('pageWeather', 'Hava durumu', 'Şehrindeki sıcaklık, hissedilen ve rüzgar (Open-Meteo).') +
+    X('city', 'Şehir', 'Şehir adı') + S('tempUnit', 'Sıcaklık birimi', [['c', 'Celsius (°C)'], ['f', 'Fahrenheit (°F)']]) +
+    T('pageShortcuts', 'Kısayollar', 'Panelde tek tıkla açılan uygulama veya site düğmeleri (en fazla 4).') +
+    '<label class="row2 col"><b>Kısayol listesi (her satır: Ad|yol veya adres)</b><textarea data-k="shortcuts" rows="4" placeholder="Hesap makinesi|calc.exe&#10;GitHub|https://github.com"></textarea></label>' +
+    T('pageHistory', 'Bildirim geçmişi', 'Kaçırdığın son bildirimleri panelde gösterir.') +
+    T('pageQuick', 'Hızlı ayarlar', 'Maskot rengi, rahatsız etme ve ayarlara kısayol.') +
+    T('pageRecent', 'Son dosyalar', 'Windows\'un son açılan dosya ve klasörleri; tıklayınca açılır (yalnızca Windows).') +
+    T('pageClaude', 'Claude Code özeti sayfası', 'Bugün kaç görev bitirdiğini ve ne kadar çalıştığını gösterir. 21:00 sonrası günlük özet bildirimi gelir.') +
+    T('pageTodo', 'Yapılacaklar', 'Panelde tıklayınca biten işler. Eklemek için: dynbar todo add "metin", API veya tray menüsü (panodaki metni ekler).') +
+    T('pageCountdown', 'Geri sayım', 'Seçtiğin tarihe kaç gün kaldığını gösterir.') +
+    X('countdownName', 'Geri sayım adı', 'Sınav, tatil, teslim…') +
+    '<label class="row2"><b>Geri sayım tarihi</b><input type="date" data-k="countdownDate"></label>' +
+    T('pageWorld', 'Dünya saatleri', 'Seçtiğin şehirlerin saati.') +
+    '<label class="row2 col"><b>Saat dilimleri (her satır: Ad|Bölge, en fazla 3)</b><textarea data-k="worldClocks" rows="3" placeholder="Tokyo|Asia/Tokyo"></textarea></label>' +
+    T('pageRates', 'Döviz', 'Seçtiğin para birimlerinin değeri (open.er-api.com, anahtar gerekmez).') +
+    X('rates', 'Para birimleri (virgülle, en fazla 3)', 'USD,EUR,GBP') + X('rateBase', 'Karşılaştırma birimi', 'TRY') +
+    S('clock24', 'Saat biçimi', [['true', '24 saat'], ['false', '12 saat']]) +
+    T('clockSeconds', 'Saniyeyi göster', 'Paneldeki saat saniyeyle birlikte görünür.') +
+    H('Bildirimler ve entegrasyon') +
+    T('mediaToasts', 'Parça değişince bildir', 'Yeni şarkı başlayınca bar kısa süre genişleyip adını gösterir.') +
+    T('osd', 'Ses ve parlaklık göstergesi', 'Ses veya parlaklık değişince bar küçük bir gösterge açar. Parlaklık sadece destekleyen ekranlarda çalışır.') +
+    T('api', 'Dış programlardan bildirim', 'HTTP ve WebSocket (127.0.0.1:47800) ile komut satırı aracı. Sadece bu bilgisayardan erişilir.') +
+    T('batteryToasts', 'Pil uyarıları', 'Pil %20 altına düşünce ve şarj dolunca bildirir.') +
+    T('dnd', 'Rahatsız etme', 'Açıkken bildirimler gösterilmez (test ve zamanlayıcılar hariç). Tray menüsünden de değiştirilebilir.') +
+    T('focusDnd', 'Pomodoro odak turunda rahatsız etme', 'Odak turu sürerken bildirimler bekletilir (zamanlayıcılar ve yüksek öncelikliler hariç). Tur bitince kaçırdıkların özetlenir.') +
+    S('sound', 'Bildirim sesi', [['off', 'Kapalı'], ['soft', 'Yumuşak'], ['normal', 'Normal']]) +
+    X('mutedApps', 'Sessize alınan uygulamalar (virgülle)', 'slack, discord') +
+    '<label class="row2 col"><b>API anahtarı</b><input type="text" data-k="apiToken" placeholder="boş = yerel erişim anahtarsız"></label>' +
+    '<button class="btn" id="gentok" style="margin:-2px 0 10px">Rastgele anahtar üret</button>' +
+    '<small>Anahtar tanımlıysa dış programlar "Authorization: Bearer ANAHTAR" göndermelidir (CLI için DYNBAR_TOKEN ortam değişkeni).</small>' +
+    T('quietOn', 'Sessiz saatler', 'Belirlediğin saat aralığında rahatsız etme otomatik açılır.') +
+    Tm('quietFrom', 'Başlangıç') + Tm('quietTo', 'Bitiş') +
+    T('lifeMascot', 'Maskotun günlük yaşamı', 'Sabah esner, öğlen acıkır, gece uykulu olur; her dilimde bir selam verir.') +
+    T('meetingMode', 'Toplantı modu', 'Takvimde etkinlik sürerken rahatsız etme otomatik açılır, bitince kaçırdıkların özetlenir (ICS takvim gerekir).') +
+    S('waterGoal', 'Günlük su hedefi', [['6', '6 bardak'], ['8', '8 bardak'], ['10', '10 bardak']], true) +
+    S('waterEvery', 'Su içme hatırlatıcısı', [['0', 'Kapalı'], ['30', '30 dk'], ['60', '60 dk'], ['90', '90 dk']], true) +
+    T('eyeBreak', 'Göz molası (20-20-20)', 'Her 20 dakikada bir 20 saniye uzağa bakmanı hatırlatır.') +
+    H('Claude Code') +
+    T('claudeLive', 'Canlı durum', 'Claude çalışırken maskot laptop açıp kod yazar, barda ne yaptığı görünür (hook kurulu olmalı).') +
+    T('claudeAsk', 'Bardan onay', 'Claude izin isteyince bar Onayla / Reddet düğmeleri gösterir. Yanıtlamazsan terminaldeki soru geçerli kalır.') +
+    T('claudeAi', 'Yapay zekâ özeti', 'İş bitince son yanıt kısa bir model çağrısıyla 10 kelimeye özetlenir (küçük bir kullanım maliyeti olur).') +
+    H('İki parmakla kaydırma hassasiyeti') +
+    '<div class="seg">' + [[260, 'Yavaş'], [160, 'Orta'], [90, 'Hızlı']].map(([v, t]) => `<label><input type="radio" name="swipe" value="${v}" data-k="swipe" data-num><span>${t}</span></label>`).join('') + '</div>';
+
+  const sw = document.getElementById('sw');
+  Object.entries(PALETTE).forEach(([k, p]) => {
+    const b = document.createElement('button'); b.className = 'sw'; b.title = p[0]; b.dataset.c = k; b.style.background = p[1];
+    b.onclick = () => dynbar.setSettings({ color: k, accent: '' }); sw.append(b);
+  });
+  let cur = {};
+  const apply = (s) => {
+    cur = s;
+    document.querySelectorAll('.sw').forEach((b) => b.classList.toggle('on', !s.accent && b.dataset.c === s.color));
+    document.querySelectorAll('[data-k]').forEach((el) => {
+      const v = s[el.dataset.k];
+      if (el.type === 'checkbox') el.checked = !!v;
+      else if (el.type === 'radio') el.checked = String(v) === el.value;
+      else if (el.type === 'color') el.value = v || (PALETTE[s.color] || PALETTE.pink)[1];
+      else el.value = v ?? '';
+    });
+  };
+  root.addEventListener('change', (e) => {
+    const el = e.target, k = el.dataset.k; if (!k) return;
+    let v = el.type === 'checkbox' ? el.checked : el.dataset.num !== undefined ? +el.value : el.value.trim();
+    if (k === 'clock24') v = el.value === 'true';
+    dynbar.setSettings({ [k]: v });
+  });
+  document.getElementById('accclr').onclick = () => dynbar.setSettings({ accent: '' });
+  document.getElementById('test').onclick = () => dynbar.test();
+  document.getElementById('gentok').onclick = () => { const a = new Uint8Array(12); crypto.getRandomValues(a); dynbar.setSettings({ apiToken: [...a].map((x) => x.toString(16).padStart(2, '0')).join('') }); };
+  const flash = (id, t) => { const b = document.getElementById(id), o = b.textContent; b.textContent = t; setTimeout(() => (b.textContent = o), 1600); };
+  document.getElementById('exp').onclick = async () => { const { todos, apiToken, ...rest } = cur; try { await navigator.clipboard.writeText(JSON.stringify(rest)); flash('exp', 'Kopyalandı ✓'); } catch { flash('exp', 'Kopyalanamadı'); } };
+  document.getElementById('imp').onclick = async () => {
+    try { const o = JSON.parse(await navigator.clipboard.readText()); if (!o || typeof o !== 'object') throw 0; const { todos, apiToken, ...rest } = o; dynbar.setSettings(rest); flash('imp', 'Yüklendi ✓'); } catch { flash('imp', 'Panoda geçerli ayar yok'); }
+  };
+  document.getElementById('reset').onclick = () => { if (confirm('Tüm ayarlar varsayılana dönsün mü?')) dynbar.send('settings:reset'); };
+  dynbar.onSettings(apply); dynbar.getSettings().then(apply);
+})();
+</script></body></html>

@@ -1,0 +1,73 @@
+{
+  "name": "dynamic-bar",
+  "version": "0.4.0",
+  "description": "Dynamic Island style bar with a tiny mascot: notifications, media, Claude Code live status",
+  "main": "main.js",
+  "bin": {
+    "dynbar": "cli.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir"
+  },
+  "dependencies": {
+    "koffi": "^2.16.3"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "license": "MIT",
+  "author": "Ahmet Efe Korkmaz",
+  "build": {
+    "appId": "com.dynamicbar.app",
+    "productName": "Dynamic Bar",
+    "copyright": "MIT",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "extras.js",
+      "extras-ui.js",
+      "vdesk.js",
+      "palette.js",
+      "cli.js",
+      "index.html",
+      "settings.html",
+      "assets/**",
+      "scripts/**",
+      "integrations/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "scripts/**",
+      "integrations/**",
+      "cli.js"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

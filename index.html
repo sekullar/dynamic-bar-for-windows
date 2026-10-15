@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<style>
+  :root { --ease: cubic-bezier(.34,1.45,.5,1); --soft: cubic-bezier(.22,.9,.3,1); --body:#ffc2d9; --ear:#ffadcc; --cheek:#ff8fb8; --bg:#000; --bga:100; --sh1:0 1px 5px rgba(0,0,0,.25); --sh2:0 3px 12px rgba(0,0,0,.3); --ui:1; --top:10px; }
+  #stage { position:absolute; left:50%; top:0; width:0; height:0; transform:scale(var(--ui)); transform-origin:0 0; }
+  html,body { margin:0; background:transparent; overflow:hidden; font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; user-select:none; }
+  #island { position:absolute; top:var(--top); left:0; transform:translateX(-50%); width:112px; height:36px; border-radius:18px; background:color-mix(in srgb, var(--bg) calc(var(--bga) * 1%), transparent); color:#fff;
+    display:flex; align-items:center; gap:10px; padding:0 8px; box-sizing:border-box; overflow:hidden; box-shadow:var(--sh1);
+    transition: width .6s var(--ease), height .6s var(--ease), border-radius .6s var(--ease), padding .6s var(--ease), top .4s var(--soft); }
+  #island.expanded { width:400px; height:78px; border-radius:30px; padding:0 16px 0 14px; }
+  #island.open { width:420px; height:136px; }
+  body[data-mode=dock] #island { top:0; border-radius:0 0 18px 18px; }
+  body[data-mode=dock] #island.expanded, body[data-mode=dock] #island.open { border-radius:0 0 30px 30px; }
+  #mascot { width:30px; height:30px; flex:none; transition: transform .6s var(--ease); animation: breathe 3.2s ease-in-out infinite; }
+  #island.expanded #mascot { transform:scale(1.55); margin-right:10px; animation-name:breatheBig; }
+  .dots { margin-left:auto; display:flex; gap:4px; transition:opacity .25s; }
+  .dots i { width:4px; height:4px; border-radius:50%; background:#ffffff55; animation:pulse 1.8s infinite; }
+  .dots i:nth-child(2){animation-delay:.2s} .dots i:nth-child(3){animation-delay:.4s}
+  #island.expanded .dots { opacity:0; }
+  #content { position:absolute; left:74px; right:18px; top:0; bottom:0; display:flex; flex-direction:column; justify-content:center;
+    opacity:0; filter:blur(6px); transform:translateY(6px); transition: opacity .25s, filter .25s, transform .35s var(--soft); pointer-events:none; }
+  #island.expanded #content { opacity:1; filter:none; transform:none; transition-delay:.15s; }
+  #island.open #content { opacity:0; transition-delay:0s; }
+  #content.swap { opacity:0 !important; filter:blur(6px) !important; transition-delay:0s !important; }
+  #title { font-size:15px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #text { font-size:12.5px; color:#ffffffb0; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #bar { height:3px; border-radius:2px; background:#ffffff22; margin-top:7px; display:none; }
+  #bar b { display:block; height:100%; width:0; border-radius:2px; background:var(--body); transition:width .3s linear; }
+
+  /* panel (boşta tıklayınca açılır) */
+  #panel { position:absolute; left:74px; right:16px; top:14px; bottom:10px; overflow:hidden; opacity:0; pointer-events:none; transition:opacity .25s; }
+  #island.open #panel { opacity:1; pointer-events:auto; transition-delay:.25s; }
+  #track { display:flex; height:calc(100% - 16px); transition:transform .5s var(--soft); }
+  #track section { flex:0 0 100%; display:flex; flex-direction:column; justify-content:center; }
+  #clock { font-size:36px; font-weight:600; letter-spacing:1px; line-height:1; }
+  #date { font-size:12.5px; color:#ffffffa0; margin-top:6px; text-transform:capitalize; }
+  .lbl { font-size:12.5px; color:#ffffffa0; margin-bottom:10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .row button { background:#ffffff14; color:#fff; border:0; border-radius:12px; padding:8px 13px; font:inherit; font-size:12.5px; cursor:pointer; transition:background .2s, transform .25s var(--ease); }
+  .row button:hover { background:#ffffff28; transform:translateY(-1px); }
+  .row button.sw { width:24px; height:24px; padding:0; border-radius:50%; border:2px solid transparent; }
+  .row button.sw.on { border-color:#fff; }
+  .pdots { position:absolute; bottom:0; left:0; right:0; display:flex; justify-content:center; gap:6px; transform:translateX(-29px); } /* panel adanın sağına kayık (sol 74px, sağ 16px): noktaları adanın ortasına hizala */
+  .pdots i { width:5px; height:5px; border-radius:3px; background:#ffffff33; cursor:pointer; transition:width .3s var(--ease), background .3s; }
+  .pdots i.on { width:15px; background:#fff; }
+  #close { z-index:5; position:absolute; top:9px; right:12px; width:22px; height:22px; border:0; border-radius:50%; background:#ffffff18; color:#fff; font-size:10px; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .25s; }
+  #island.open #close { opacity:1; pointer-events:auto; }
+
+  /* maskot */
+  .body { fill:var(--body); } .ear { fill:var(--ear); } .cheek { fill:var(--cheek); opacity:.55; } .eye { fill:#2a1a24; }
+  .mouth { fill:none; stroke:#2a1a24; stroke-width:1.6; stroke-linecap:round; }
+  .eye { transform-box:fill-box; transform-origin:center; animation:blink 4.5s infinite; }
+  .zzz { opacity:0; font:700 7px sans-serif; fill:#ffffffaa; }
+  .body-g { transform-box:fill-box; transform-origin:50% 90%; }
+  #mascot[data-mood=happy] .body-g { animation:hop .7s var(--ease) 2; }
+  #mascot[data-mood=alert] .body-g { animation:wiggle .4s ease-in-out 4; }
+  #mascot[data-mood=sleep] .eye { animation:none; transform:scaleY(.12); }
+  #mascot[data-mood=sleep] .zzz { opacity:1; animation:pulse 2.4s infinite; }
+  /* Claude Code maskotuna dönüşüm: pembe maskot küçülüp kaybolur, turuncu blok maskot pırıltıyla belirir, sonra geri döner */
+  .lap { opacity:0; transform:translateY(12px); transform-box:fill-box; transition:opacity .3s, transform .6s var(--ease); }
+  .lap .lid { fill:#3b3b44; stroke:#6a6a78; stroke-width:.8; } .lap .lgo { fill:#d97757; } .lap .lbase { fill:#55555f; }
+  .lap .paw { fill:var(--body); stroke:var(--ear); stroke-width:.6; }
+  .lap .code { font:700 6px ui-monospace,Consolas,monospace; fill:#8fe3a8; opacity:0; }
+  #mascot[data-mood=working] .lap { opacity:1; transform:none; }
+  #mascot[data-mood=working] .body-g { animation:none; transform:translateY(-1px); }
+  #mascot[data-mood=working] .eye { animation:none; transform:scaleY(.55) translateY(1px); }
+  #mascot[data-mood=working] .paw.p1 { animation:type .32s ease-in-out infinite; }
+  #mascot[data-mood=working] .paw.p2 { animation:type .32s ease-in-out .16s infinite; }
+  #mascot[data-mood=working] .code.c1 { animation:codeup 1.6s ease-out infinite; }
+  #mascot[data-mood=working] .code.c2 { animation:codeup 1.6s ease-out .8s infinite; }
+  @keyframes type { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-2.2px); } }
+  @keyframes codeup { 0% { opacity:0; transform:translateY(5px); } 30% { opacity:1; } 100% { opacity:0; transform:translateY(-6px); } }
+  /* maskotun günlük yaşamı: esneme, acıkma, uykulu, su içme */
+  .yawnm, .drool, .glass, .food { opacity:0; } .gl { fill:#ffffff40; stroke:#cfe8ff; stroke-width:.8; } .gw { fill:#6cc6ff; }
+  .glass { transform-box:fill-box; transform-origin:0% 100%; transition:opacity .25s; }
+  #mascot[data-mood=yawn] .mouth, #mascot[data-mood=hungry] .mouth { display:none; }
+  #mascot[data-mood=yawn] .yawnm { opacity:1; animation:yawn 2.2s ease-in-out; transform-box:fill-box; transform-origin:center; }
+  #mascot[data-mood=yawn] .eye { animation:none; transform:scaleY(.2); }
+  #mascot[data-mood=yawn] .body-g { animation:stretch 2.2s ease-in-out; }
+  #mascot[data-mood=hungry] .yawnm { opacity:1; transform:scale(.55); transform-box:fill-box; transform-origin:center; }
+  #mascot[data-mood=hungry] .drool { opacity:1; animation:drip 1.6s ease-in infinite; }
+  #mascot[data-mood=hungry] .food { opacity:1; animation:bob 1.2s ease-in-out infinite; }
+  #mascot[data-mood=sleepy] .eye { animation:none; transform:scaleY(.3); }
+  #mascot[data-mood=sleepy] .zzz { opacity:1; animation:pulse 2s infinite; }
+  #mascot[data-mood=sleepy] .body-g { animation:droop 3s ease-in-out infinite; }
+  #mascot[data-mood=drink] .glass { opacity:1; animation:sip 1.6s ease-in-out 1; }
+  #mascot[data-mood=drink] .body-g { animation:hop .7s var(--ease) 2; }
+  @keyframes yawn { 0%,100% { transform:scale(.3); } 40%,70% { transform:scale(1.5,1.9); } }
+  @keyframes stretch { 0%,100% { transform:scale(1); } 45%,70% { transform:scale(.94,1.12); } }
+  @keyframes bob { 50% { transform:translateY(-2px); } }
+  @keyframes droop { 0%,100% { transform:rotate(0); } 50% { transform:rotate(-5deg) translateY(1px); } }
+  @keyframes sip { 0% { transform:rotate(0); } 35%,70% { transform:rotate(-38deg) translate(-3px,-2px); } 100% { transform:rotate(0); } }
+  .sadm { display:none; fill:none; stroke:#2a1a24; stroke-width:1.6; stroke-linecap:round; }
+  .sweat { fill:#8fd0ff; opacity:0; }
+  #mascot[data-mood=sad] .body { fill:#f08a8a; } #mascot[data-mood=sad] .ear { fill:#e07070; }
+  #mascot[data-mood=sad] .mouth { display:none; } #mascot[data-mood=sad] .sadm { display:block; }
+  #mascot[data-mood=sad] .body-g { animation:none; transform:translateY(1px) rotate(-3deg); }
+  #mascot[data-mood=sad] .sweat { animation:drip 1.4s ease-in infinite; }
+  @keyframes drip { 0% { opacity:0; transform:translateY(-3px); } 30% { opacity:1; } 100% { opacity:0; transform:translateY(7px); } }
+  /* onay düğmeleri (bardan onay) */
+  #acts { display:none; gap:8px; margin-top:8px; pointer-events:auto; }
+  #acts button { flex:1; border:0; border-radius:10px; padding:6px 0; font:inherit; font-size:12.5px; font-weight:600; color:#fff; background:#ffffff1f; cursor:pointer; }
+  #acts button[data-a=allow] { background:#2f9e5b; } #acts button[data-a=deny] { background:#c84b4b; }
+  #acts button:hover { filter:brightness(1.15); }
+  #island.ask { height:112px; } #island.ask #acts { display:flex; }
+  .clawd { fill:#d97757; opacity:0; transform-box:fill-box; transform-origin:50% 100%; transform:scale(.3) rotate(-12deg); transition:opacity .25s, transform .5s var(--ease); }
+  .clawd .ceye { fill:#1a1210; }
+  .body-g { transition:opacity .25s, transform .5s var(--ease); }
+  .spark { fill:#ffd9a8; opacity:0; transform-box:fill-box; transform-origin:center; }
+  #mascot[data-mood=claude] .body-g { animation:none; opacity:0; transform:scale(.3) rotate(12deg); }
+  #mascot[data-mood=claude] .clawd { opacity:1; transform:none; animation:clawdHop .6s var(--ease) .35s 2; }
+  #mascot[data-mood=claude] .spark { animation:sparkle 1.3s ease-out .1s; }
+  @keyframes clawdHop { 40% { transform:translateY(-4px) scale(.94,1.1); } 70% { transform:scale(1.08,.92); } }
+  @keyframes sparkle { 0% { opacity:0; transform:scale(.2) rotate(0); } 35% { opacity:1; transform:scale(1.25) rotate(40deg); } 100% { opacity:0; transform:scale(.6) rotate(90deg); } }
+  @keyframes breathe { 50% { transform:scale(1.05) translateY(-.5px); } }
+  @keyframes breatheBig { 0%,100% { transform:scale(1.55); } 50% { transform:scale(1.6) translateY(-1px); } }
+  @keyframes blink { 0%,93%,100% { transform:scaleY(1); } 96% { transform:scaleY(.1); } }
+  @keyframes hop { 0%,100% { transform:translateY(0) scale(1,1); } 40% { transform:translateY(-4px) scale(.94,1.1); } 70% { transform:translateY(0) scale(1.08,.92); } }
+  @keyframes wiggle { 25% { transform:rotate(-8deg); } 75% { transform:rotate(8deg); } }
+  @keyframes pulse { 50% { opacity:.25; } }
+  /* medya */
+  .eq { display:none; margin-left:auto; gap:2px; align-items:flex-end; height:12px; transition:opacity .25s; }
+  .eq i { width:3px; height:100%; border-radius:2px; background:var(--body); transform-origin:bottom; animation:eq 1s ease-in-out infinite; }
+  .eq i:nth-child(2){animation-delay:.2s} .eq i:nth-child(3){animation-delay:.4s} .eq i:nth-child(4){animation-delay:.1s}
+  #island.playing .dots { display:none; } #island.playing .eq { display:flex; } #island.expanded .eq { opacity:0; }
+  .mrow { display:flex; gap:10px; align-items:center; margin-bottom:8px; }
+  #art { width:50px; height:50px; flex:none; border-radius:12px; background:#ffffff14 center/cover; }
+  .mtxt { min-width:0; flex:1; }
+  #mt { font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #ma { font-size:12px; color:#ffffffa0; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mctl { align-items:center; flex-wrap:nowrap; gap:6px; }
+  .mctl button { width:30px; height:30px; padding:0; border-radius:50%; display:grid; place-items:center; flex:none; }
+  .mctl svg { width:13px; height:13px; fill:#fff; }
+  #mprog { flex:1; height:3px; border-radius:2px; background:#ffffff22; margin-left:4px; }
+  #mprog b { display:block; height:100%; width:0; border-radius:2px; background:var(--body); transition:width .9s linear; }
+  #mtime { font-size:11px; color:#ffffffa0; min-width:34px; text-align:right; }
+  #mascot[data-mood=music] .body-g { animation:sway 1.4s ease-in-out infinite; }
+  @keyframes sway { 0%,100% { transform:rotate(-5deg); } 50% { transform:rotate(5deg); } }
+  @keyframes eq { 0%,100% { transform:scaleY(.25); } 50% { transform:scaleY(1); } }
+  /* ek sayfalar */
+  .ptime { display:none; margin-left:auto; font-size:11.5px; font-variant-numeric:tabular-nums; color:#ffffffcc; transition:opacity .25s; }
+  #island.pomo .ptime { display:block; } #island.pomo .dots, #island.pomo .eq { display:none; } #island.expanded .ptime { opacity:0; }
+  .stat { display:flex; align-items:center; gap:8px; font-size:12px; margin:4px 0; } .stat span { width:34px; color:#ffffffa0; } .stat em { font-style:normal; width:34px; text-align:right; }
+  .stat div { flex:1; height:4px; border-radius:2px; background:#ffffff22; } .stat b { display:block; height:100%; width:0; border-radius:2px; background:var(--body); transition:width .6s var(--soft); }
+  .clips { flex-direction:column; flex-wrap:nowrap; gap:4px; } .clips button { text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:5px 10px; }
+  .big { font-size:30px; font-weight:600; letter-spacing:1px; line-height:1; } .sub { font-size:12.5px; color:#ffffffa0; margin:4px 0 8px; }
+  .heart { position:absolute; font-size:14px; pointer-events:none; animation:floatup 1s ease-out forwards; } @keyframes floatup { to { transform:translateY(-22px); opacity:0; } }
+  #eyes { transition:transform .15s ease-out; }
+  /* animasyon: gerçek yay (spring) eğrileri */
+  :root { --spring: linear(0.0, 0.0122, 0.0453, 0.095, 0.1569, 0.2275, 0.3034, 0.3819, 0.4608, 0.538, 0.6122, 0.682, 0.7466, 0.8055, 0.8583, 0.9048, 0.9452, 0.9795, 1.0081, 1.0313, 1.0496, 1.0634, 1.0732, 1.0795, 1.0828, 1.0835, 1.0821, 1.0791, 1.0748, 1.0694, 1.0634, 1.0571, 1.0505, 1.0439, 1.0375, 1.0313, 1.0256, 1.0203, 1.0154, 1.0111, 1); --spring-soft: linear(0.0, 0.0077, 0.0287, 0.0604, 0.1004, 0.1464, 0.1968, 0.2501, 0.3048, 0.36, 0.4146, 0.4681, 0.5198, 0.5693, 0.6162, 0.6603, 0.7015, 0.7396, 0.7747, 0.8068, 0.836, 0.8623, 0.8859, 0.9069, 0.9255, 0.9418, 0.956, 0.9683, 0.9789, 0.9878, 0.9953, 1.0016, 1.0066, 1.0107, 1.0138, 1.0162, 1.0179, 1.019, 1.0197, 1.0199, 1); }
+  #island { transition: width .8s var(--spring), height .75s var(--spring-soft), border-radius .6s var(--spring-soft), padding .6s var(--spring-soft), top .5s var(--spring-soft), transform .4s var(--spring-soft), box-shadow .5s ease; }
+  #island.expanded { box-shadow: var(--sh2); }
+  body:not([data-mode=dock]) #island:not(.expanded):hover { transform: translateX(-50%) scale(1.06); }
+  #island:active { transform: translateX(-50%) scale(.97); }
+  #mascot { scale: 1; transition: scale .7s var(--spring), margin-right .5s var(--spring-soft); }
+  #island.expanded #mascot { transform: none; animation-name: breathe; scale: 1.55; margin-right: 10px; }
+  #ears { transform-box: fill-box; transform-origin: 50% 100%; animation: twitch 7s ease-in-out infinite; }
+  @keyframes twitch { 0%,90%,100% { transform: rotate(0); } 93% { transform: rotate(-7deg); } 96% { transform: rotate(5deg); } }
+  #content > div { opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .5s var(--spring-soft); }
+  #island.expanded:not(.open) #content > div { opacity: 1; transform: none; }
+  #island.expanded #title { transition-delay: .12s; } #island.expanded #text { transition-delay: .2s; } #island.expanded #bar { transition-delay: .28s; }
+  #track { transition: transform .6s var(--spring-soft); }
+  #track section { opacity: 0; transform: scale(.94); transition: opacity .35s, transform .55s var(--spring-soft); }
+  #track section.active { opacity: 1; transform: none; }
+  .eq i:nth-child(1) { animation-duration: .9s; } .eq i:nth-child(2) { animation-duration: 1.15s; } .eq i:nth-child(3) { animation-duration: .8s; } .eq i:nth-child(4) { animation-duration: 1.05s; }
+  #sc button { padding: 6px 10px; }
+  #art.noart { display:grid; place-items:center; } #art.noart::after { content:'♪'; font-size:20px; color:#ffffff55; }
+  .hrow { display:flex; gap:8px; font-size:12.5px; align-items:baseline; min-width:0; } .hrow em { font-style:normal; color:#ffffff80; font-size:11px; flex:none; }
+  .hrow span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  body[data-anim=smooth] { --spring: cubic-bezier(.22,.9,.3,1); --spring-soft: cubic-bezier(.22,.9,.3,1); }
+  body[data-anim=off] * { animation:none !important; transition-duration:.01s !important; }
+  .wrow { display:flex; justify-content:space-between; gap:12px; font-size:13px; margin:4px 0; color:#ffffffb8; } .wrow b { color:#fff; font-weight:600; font-variant-numeric:tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition-duration:.01s !important; } }
+</style></head>
+<body data-mode="float">
+<div id="stage"><div id="island">
+  <svg id="mascot" viewBox="0 0 40 40" data-mood="idle">
+    <g class="body-g">
+      <g id="ears"><polygon class="ear" points="8,16 10,4 19,12"/><polygon class="ear" points="32,16 30,4 21,12"/></g>
+      <ellipse class="body" cx="20" cy="23" rx="15" ry="13"/>
+      <g id="eyes"><ellipse class="eye" cx="14.5" cy="22" rx="1.9" ry="2.6"/><ellipse class="eye" cx="25.5" cy="22" rx="1.9" ry="2.6"/></g>
+      <circle class="cheek" cx="10" cy="27" r="2.6"/><circle class="cheek" cx="30" cy="27" r="2.6"/>
+      <path class="mouth" d="M17.5 27 Q20 29.5 22.5 27"/><path class="sadm" d="M17.5 29 Q20 26.2 22.5 29"/><ellipse class="yawnm" cx="20" cy="28.2" rx="2.4" ry="3"/><path class="drool" d="M23.6 29.4q1.1 2.2 0 3.2q-1.1-1 0-3.2z"/><g id="acc"></g>
+    </g>
+    <g class="lap">
+      <rect x="9" y="20" width="22" height="13" rx="2" class="lid"/><path class="lgo" d="M20 24l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/>
+      <path d="M5 33.5h30l-2 3H7z" class="lbase"/>
+      <ellipse class="paw p1" cx="13" cy="31" rx="2.4" ry="2"/><ellipse class="paw p2" cx="27" cy="31" rx="2.4" ry="2"/>
+      <text class="code c1" x="29" y="12">&lt;/&gt;</text><text class="code c2" x="3" y="14">{ }</text>
+    </g>
+    <path class="sweat" d="M31 10q2 3 0 4.6q-2-1.6 0-4.6z"/>
+    <g class="glass"><path d="M26 19h9l-1.3 12h-6.4z" class="gl"/><path d="M27.2 23h6.6l-.7 7.4h-5.2z" class="gw"/></g>
+    <text class="food" x="25" y="9" font-size="9">🍖</text>
+    <g class="clawd">
+      <rect x="4" y="16" width="4" height="6"/><rect x="32" y="16" width="4" height="6"/>
+      <rect x="8" y="11" width="24" height="15"/>
+      <rect x="11" y="26" width="3" height="6"/><rect x="16" y="26" width="3" height="6"/><rect x="21" y="26" width="3" height="6"/><rect x="26" y="26" width="3" height="6"/>
+      <rect class="ceye" x="14" y="16" width="2.6" height="4.4"/><rect class="ceye" x="23.4" y="16" width="2.6" height="4.4"/>
+    </g>
+    <g class="spark"><path d="M6 8l1.2 2.8L10 12 7.2 13.2 6 16 4.8 13.2 2 12l2.8-1.2z"/><path d="M33 3l1 2.2L36.2 6 34 7l-1 2.2L32 7l-2.2-1L32 5.2z"/><path d="M34 28l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8z"/></g>
+    <text class="zzz" x="30" y="9">z</text>
+  </svg>
+  <div class="dots"><i></i><i></i><i></i></div>
+  <div class="eq"><i></i><i></i><i></i><i></i></div><span class="ptime"></span>
+  <div id="content"><div id="title"></div><div id="text"></div><div id="bar"><b></b></div><div id="acts"></div></div>
+  <button id="close" aria-label="Kapat">✕</button>
+  <div id="panel">
+    <div id="track">
+      <section id="media" data-feat="pageMedia">
+        <div class="mrow"><div id="art"></div><div class="mtxt"><div id="mt">Çalan bir şey yok</div><div id="ma"></div></div></div>
+        <div class="mctl row">
+          <button data-m="prev" aria-label="Önceki"><svg viewBox="0 0 16 16"><path d="M3 3h2v10H3zM14 3v10L6 8z"/></svg></button>
+          <button data-m="playpause" id="pp" aria-label="Oynat/Duraklat"><svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg></button>
+          <button data-m="next" aria-label="Sonraki"><svg viewBox="0 0 16 16"><path d="M13 3h-2v10h2zM2 3v10l8-5z"/></svg></button>
+          <div id="mprog"><b></b></div><span id="mtime"></span>
+        </div>
+      </section>
+      <section id="clockSec"><div id="clock"></div><div id="date"></div></section>
+      <section><div class="lbl">Zamanlayıcı başlat</div><div class="row" id="tmr"></div></section>
+      <section data-feat="pagePomodoro"><div class="big" id="pt">25:00</div><div class="sub" id="pl">Odak</div><div class="row"><button id="pgo">Başlat</button><button id="prs">Sıfırla</button></div></section>
+      <section data-feat="pageStopwatch"><div class="big" id="swt">00:00.0</div><div class="sub">Kronometre</div><div class="row"><button id="swgo">Başlat</button><button id="swrs">Sıfırla</button></div></section>
+      <section id="todoSec" data-feat="pageTodo"><div class="clips row" id="todos"></div></section>
+      <section id="claudeSec" data-feat="pageClaude"><div class="lbl">Claude Code · bugün</div><div class="big" id="cn">0 görev</div><div class="sub" id="cl">Henüz görev yok</div></section>
+      <section data-feat="pageSystem"><div class="stat"><span>CPU</span><div><b id="scpu"></b></div><em id="scpuv">–</em></div><div class="stat"><span>RAM</span><div><b id="smem"></b></div><em id="smemv">–</em></div><div class="stat"><span>Pil</span><div><b id="sbat"></b></div><em id="sbatv">–</em></div><div class="sub" id="snet" style="margin:6px 0 0">↓ –   ↑ –</div></section>
+      <section data-feat="pageClipboard"><div class="clips row" id="clips"></div></section>
+      <section data-feat="pageCalendar"><div class="lbl">Sıradaki etkinlik</div><div id="cal1" style="font-size:14px;font-weight:600"></div><div id="cal2" class="sub"></div></section>
+      <section data-feat="pageWeather"><div class="big" id="wt">–</div><div class="sub" id="wl">Ayarlardan şehir gir</div></section>
+      <section id="ratesSec" data-feat="pageRates"><div id="rates"></div></section>
+      <section id="worldSec" data-feat="pageWorld"><div id="world"></div></section>
+      <section id="cdSec" data-feat="pageCountdown"><div class="big" id="cdv">–</div><div class="sub" id="cdn"></div></section>
+      <section data-feat="pageShortcuts"><div class="lbl">Kısayollar</div><div class="row" id="sc"></div></section>
+      <section id="recSec" data-feat="pageRecent"><div class="clips row" id="recent"></div></section>
+      <section data-feat="pageHistory"><div class="lbl">Son bildirimler</div><div class="clips row" id="hist"></div></section>
+      <section data-feat="pageQuick"><div class="lbl">Hızlı ayarlar</div><div class="row" id="sws"></div><div class="row" style="margin-top:8px"><button id="qdnd">Rahatsız etme</button><button id="qset">Ayarlar</button></div></section>
+    </div>
+    <div class="pdots"><i></i><i></i><i></i><i></i></div>
+  </div>
+</div></div>
+<script src="palette.js"></script>
+<script src="renderer.js"></script>
+<script src="extras-ui.js"></script>
+</body></html>
