@@ -4,8 +4,24 @@
   const bar = $('#bar'), fill = $('#bar b'), track = $('#track');
   let dots = [], pages = [], cur = null, cfg = {}, hist = [], focusOn = false, ac = null, lastCur = null, armed = false, leaveT = 0;
   let ambient = null, morphT, queue = [], busy = false, sleepT, timerT, nextT, closeT, hoverT, page = 0, wheelSum = 0, lastWheel = 0;
+  let typing = null; // satır içi yanıt yazılıyor: {a, x}
   let playing = false, primed = false, lastKey, swipe = 160, toasts = true, locked = false, media = {}, lastD = 0, lockAt = 0;
-  const setMood = (m) => (mascot.dataset.mood = m);
+  const setMood = (m) => { mascot.dataset.mood = m; mascot.dataset.sub = ''; };
+  let miniClaude = false, lastDown = 0, subT;
+  // Claude'un ne yaptığına göre maskot duruşu (hook "pose" gönderir; yoksa metinden çıkarılır)
+  const poseOf = (a) => a.pose || (/yazıyor/.test(a.text || '') ? 'type' : /Komut/i.test(a.text || '') ? 'run' : /bak/i.test(a.text || '') ? 'read' : /arıyor/.test(a.text || '') ? 'search'
+    : /Plan|Düşün/i.test(a.text || '') ? 'think' : /ajan/i.test(a.text || '') ? 'agent' : /Ekran/i.test(a.text || '') ? 'screen' : 'type');
+  function micro() { // uzun işlerde maskot donmuş kalmasın: ara sıra kameraya bakar, bir yudum alır, gerinir
+    clearTimeout(subT);
+    subT = setTimeout(() => {
+      if (mascot.dataset.mood === 'working' && !isOpen()) {
+        const s = ['glance', 'glance', 'sip', 'stretch'][Math.floor(Math.random() * 4)]; mascot.dataset.sub = s;
+        setTimeout(() => { if (mascot.dataset.sub === s) mascot.dataset.sub = ''; }, 2300);
+      }
+      micro();
+    }, 14000 + Math.random() * 16000);
+  }
+  micro();
   const pad = (n) => String(n).padStart(2, '0');
   const fmt = (s) => pad(Math.floor(s / 60)) + ':' + pad(s % 60);
   const isOpen = () => island.classList.contains('open');
@@ -35,7 +51,7 @@
   }
 
   function collapse() {
-    island.classList.remove('expanded', 'open', 'ask'); dynbar.raise(false); clearTimeout(sleepT);
+    island.classList.remove('expanded', 'open', 'ask', 'claudework'); dynbar.raise(false); clearTimeout(sleepT);
     setMood(playing ? 'music' : 'idle');
     const sl = cfg.sleepAfter ?? 20;
     if (!playing && sl > 0) sleepT = setTimeout(() => setMood('sleep'), sl * 1000);
@@ -65,6 +81,8 @@
   }
 
   function paintNotif(a) { // simge, uygulama adı, ilerleme ve renk dahil bildirim içeriğini çiz
+    if (a.mood === 'working') mascot.dataset.pose = poseOf(a);
+    island.classList.toggle('claudework', isAmbient(a));
     title.textContent = (a.icon ? a.icon + ' ' : '') + (a.title || '');
     text.textContent = a.app ? (a.text ? a.app + ' · ' + a.text : a.app) : (a.text || '');
     bar.style.display = (a.type === 'timer' || a.progress != null) ? 'block' : 'none';
@@ -76,14 +94,36 @@
     (a.actions || []).forEach((x) => {
       const b = document.createElement('button'); b.textContent = x.label; b.dataset.a = x.id;
       b.addEventListener('mousedown', (e) => {
-        e.stopPropagation(); if (a.answered) return; a.answered = true; // çift tetiklenmeye karşı
-        if (a.onAction) a.onAction(x.id); else dynbar.send('ask-answer', { id: a.askId, answer: x.id }); // yerel eylem (su içme) ya da ana süreçteki onay
+        e.stopPropagation();
+        if (x.input && a.cbId && !a.answered) { startTyping(a, x); return; }
+        if (x.keep) { if (a.cbId) dynbar.send('notif-action', { cbId: a.cbId, action: x.id }); return; } // kalıcı düğme (ör. hoparlör): bildirim açık kalır
+        if (a.answered) return; a.answered = true; // çift tetiklenmeye karşı
+        if (a.onAction) a.onAction(x.id); else if (a.cbId) dynbar.send('notif-action', { cbId: a.cbId, action: x.id }); else dynbar.send('ask-answer', { id: a.askId, answer: x.id }); // yerel eylem (su içme), gönderene geri çağrı ya da ana süreçteki onay
         next();
       });
+      b.addEventListener('click', (e) => e.stopPropagation()); // mousedown sonrası gelen click adaya ulaşıp paneli açmasın
       acts.append(b);
     });
   }
+  // Satır içi yanıt: "Yanıtla" gibi input:true düğmeye basınca adada yazı kutusu açılır (Enter gönderir, Esc iptal). Odak alınamazsa gönderene metinsiz haber verilir.
+  function startTyping(a, x) {
+    clearTimeout(nextT); typing = { a, x }; island.classList.add('typing'); $('#rin').value = '';
+    dynbar.send('typing', true);
+    setTimeout(() => { if (!typing) return; $('#rin').focus(); if (!document.hasFocus()) failTyping(); }, 450);
+  }
+  function endTyping() { typing = null; island.classList.remove('typing'); dynbar.send('typing', false); }
+  function submitTyping() {
+    if (!typing) return; const t = $('#rin').value.trim(), { a, x } = typing; endTyping(); a.answered = true;
+    if (t) dynbar.send('notif-action', { cbId: a.cbId, action: x.id, text: t });
+    next();
+  }
+  function cancelTyping() { if (!typing) return; const a = typing.a; endTyping(); a.sticky ? schedule(a) : next(); }
+  function failTyping() { if (!typing) return; const { a, x } = typing; endTyping(); a.answered = true; dynbar.send('notif-action', { cbId: a.cbId, action: x.id }); next(); }
+  $('#rin').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitTyping(); } else if (e.key === 'Escape') { e.preventDefault(); cancelTyping(); } });
+  $('#rsend').addEventListener('mousedown', (e) => { e.stopPropagation(); submitTyping(); });
+  window.addEventListener('blur', () => { if (typing) setTimeout(() => { if (typing && !document.hasFocus()) cancelTyping(); }, 350); });
   function schedule(a) { // kalıcı (sticky) bildirimler tıklanana veya kapatılana kadar durur (en çok 5 dk)
+    if (typing) return;
     clearTimeout(nextT);
     nextT = setTimeout(next, a.sticky ? 300000 : (a.ttl || 4) * 1000 * (cfg.ttlScale || 1));
   }
@@ -91,7 +131,7 @@
   function push(a) {
     if (a.key === 'claude') { // Claude canlı durumu: diğer bildirimlerin önüne geçmez, onlar bitince geri gelir
       if (a.mood === 'working') { ambient = a; if (!busy) { queue.unshift(a); next(); } return; }
-      ambient = null;
+      ambient = null; miniClaude = false;
     }
     if (a.key) queue = queue.filter((q) => q.key !== a.key); // aynı anahtarlı bekleyen eskiyi at
     if (queue.length >= 50) queue.shift();
@@ -100,21 +140,24 @@
       if (!busy) next(); else if (cur && cur.type !== 'timer') next();
       return;
     }
-    queue.push(a); if (!busy) next();
+    queue.push(a); if (!busy || isAmbient(cur)) next(); // Claude canlı durumu diğer bildirimleri bekletmez
   }
 
   function next() {
     clearTimeout(nextT); clearInterval(timerT);
+    if (typing) endTyping();
     if (cur && cur.askId && !cur.answered) { cur.answered = true; dynbar.send('ask-answer', { id: cur.askId, answer: 'dismissed' }); } // yanıtlanmadan geçilen onay: terminale düşsün
     const a = queue.shift() || ambient; cur = a || null;
     if (!a) { busy = false; return collapse(); }
-    busy = true; clearTimeout(sleepT); clearTimeout(closeT); dynbar.raise(true); log(a);
+    const mini = miniClaude && isAmbient(a); // küçültülmüş Claude durumu: adayı açmadan hap olarak kalır
+    busy = true; clearTimeout(sleepT); clearTimeout(closeT); dynbar.raise(!mini); log(a);
     const wasExpanded = island.classList.contains('expanded');
     content.classList.add('swap'); island.classList.remove('open');
     setTimeout(() => {
       paintNotif(a);
       setMood('idle'); void mascot.offsetWidth; setMood(a.mood || 'happy');
       if (a.mood === 'claude') { clearTimeout(morphT); morphT = setTimeout(() => { if (cur === a) setMood('happy'); }, 3400); } // Claude Code maskotu bir süre kalır, sonra eski haline döner
+      if (mini) { island.classList.remove('expanded', 'open', 'ask'); content.classList.remove('swap'); schedule(a); return; }
       island.classList.add('expanded'); content.classList.remove('swap');
       if (a.type !== 'timer' && (!a.key || a.askId) && a.mood !== 'music') ping(a.mood);
       a.type === 'timer' ? runTimer(a) : schedule(a);
@@ -197,9 +240,18 @@
     armed = insideCur(); // kısayolla açıldıysa ve imleç dışarıdaysa, imleç bir kez içeri girene kadar kendiliğinden kapanmaz
     go(playing && pages.includes($('#media')) ? 0 : Math.max(0, pages.indexOf($('#clockSec'))), true);
   }
-  function closePanel() { clearTimeout(closeT); clearTimeout(leaveT); leaveT = 0; if (!busy) collapse(); else if (isOpen()) island.classList.remove('open'); }
+  function showMini() { miniClaude = true; island.classList.remove('expanded', 'open', 'ask'); dynbar.raise(false); setMood('working'); }
+  function restoreFull() { miniClaude = false; if (cur) paintNotif(cur); island.classList.remove('open'); island.classList.add('expanded'); dynbar.raise(true); setMood('working'); }
+  function closePanel() {
+    clearTimeout(closeT); clearTimeout(leaveT); leaveT = 0;
+    if (!busy) return collapse();
+    if (!isOpen()) return;
+    island.classList.remove('open');
+    // panel açılırken maskot "happy" olmuştu: meşgul görünüme dön (Claude çalışıyorsa çalışan maskot, küçültülmüşse hap)
+    if (cur && isAmbient(cur) && miniClaude) showMini(); else if (cur) setMood(cur.mood || 'happy');
+  }
   function activate() { // tıklama, kısayol veya üzerine gelme: bildirim varsa geç (url varsa aç), yoksa paneli aç
-    if (isOpen()) return;
+    if (isOpen() || typing) return;
     if (busy && !isAmbient(cur)) { if (cur && cur.url) dynbar.send('open-url', cur.url); next(); } else openPanel(); // canlı durum varken tıklayınca panel açılır
   }
 
@@ -215,7 +267,7 @@
 
   // olaylar
   dynbar.onActivity((a) => {
-    if (a.key && busy && cur && cur.key === a.key) { cur = a; paintNotif(a); if (a.parcel) setMood(a.mood || 'courier'); schedule(a); return; } // aynı anahtar: yerinde güncelle (ilerleme, ses/parlaklık göstergesi)
+    if (a.key && busy && cur && cur.key === a.key) { cur = a; if (isAmbient(a)) ambient = a; paintNotif(a); if (a.parcel) setMood(a.mood || 'courier'); schedule(a); return; } // aynı anahtar: yerinde güncelle (ilerleme, ses/parlaklık göstergesi)
     push(a);
   });
   dynbar.on('missed', (list) => (list || []).forEach(addHist));
@@ -248,6 +300,9 @@
   island.addEventListener('mousedown', () => dynbar.send('dom-click'), true); // yakalama aşaması: stopPropagation eden düğmeler dahil
   island.addEventListener('mousedown', (e) => {
     dynbar.setInteractive(true);
+    const now = Date.now(); // küçültülmüş Claude hapına çift tıklama: tekrar genişlet
+    if (e.button === 0 && miniClaude && cur && isAmbient(cur) && now - lastDown < 450) { lastDown = 0; restoreFull(); return; }
+    lastDown = now;
     if (e.button === 0) activate();
   });
   island.addEventListener('click', (e) => {
@@ -260,6 +315,7 @@
     const was = isOpen(); el.dispatchEvent(new MouseEvent('mousedown', o)); el.dispatchEvent(new MouseEvent('mouseup', o));
     if (isOpen() === was && !busy) el.dispatchEvent(new MouseEvent('click', o)); // mousedown paneli açtı/kapattıysa click gönderme (çift tetiklenmesin)
   });
+  $('#minbtn').addEventListener('mousedown', (e) => { e.stopPropagation(); showMini(); });
   $('#close').addEventListener('mousedown', (e) => { e.stopPropagation(); closePanel(); });
   $('.pdots').addEventListener('mousedown', (e) => { e.stopPropagation(); const k = [...$('.pdots').children].indexOf(e.target); if (k >= 0) go(k); });
   // iki parmakla kaydırma (touchpad) veya fare tekerleği ile sayfa değiştir

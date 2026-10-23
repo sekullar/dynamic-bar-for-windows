@@ -40,6 +40,7 @@ sert kapanırsa eski kalabilir, bağlantı kurulamazsa yok say. Anahtar yalnızc
 | `priority` | `high`: rahatsız etmeyi ve sessiz saatleri aşar, sıranın başına geçer |
 | `force` | `true`: rahatsız etmeyi aşar (sıra değişmez) |
 | `type: "timer"`, `seconds` | Geri sayım bildirimi |
+| `actions`, `callback`, `data` | En çok 3 düğme: `[{"id":"reply","label":"Yanıtla","keep":false}]` (etiket 14 karaktere kadar). Düğmeye basılınca `callback` adresine `POST {"action":"reply","data":"..."}` gider (yalnızca `http://127.0.0.1:<port>/yol`, yanıt beklenmez). `keep: true` düğme bildirimi kapatmaz. Phoneix yanıt ve arama düğmeleri için kullanır |
 
 Dizi gönderirsen (en çok 10) hepsi sırayla gösterilir. Saniyede çok fazla istek sınırlanır (5 sn'de 25).
 
@@ -124,6 +125,7 @@ Claude Code çalışırken sürekli bildirim istemezsen yalnızca `Notification`
 `~/.claude/settings.json` içinde her biri için aynı komut tanımlanır (yukarıdaki örnekteki gibi).
 
 - **Canlı durum:** Claude çalışırken maskot laptop açıp kod yazar, barda "Kod yazıyor · main.js" gibi durum görünür (`key: "claude"`, `mood: "working"`). Diğer bildirimler önüne geçer, bitince geri gelir.
+  Maskot yarım profilde, kaşları çatık çalışır; ne yaptığına göre duruşu değişir (`pose`: `type`, `run`, `read`, `search`, `think`, `agent`, `screen`) ve ara sıra kameraya bakar, bir yudum alır, gerinir. Adadaki **–** düğmesi durumu küçültür (maskot hapta çalışmaya devam eder); küçültülmüş hapa çift tıklayınca genişler.
 - **Bardan onay:** izin istenince Onayla / Reddet düğmeleri çıkar. Yanıtlamazsan (60 sn) veya terminalden yanıtlarsan terminaldeki soru geçerli kalır.
   Uç: `POST /ask {"title","text","timeout"}` yanıt `{"answer":"allow|deny|dismissed|timeout|unavailable|closed"}` olana kadar bekler.
 - **Özet:** `Stop` olayında son yanıt `claude -p --model haiku` ile 10 kelimeye özetlenir; olmazsa ilk cümleden çıkarılır.

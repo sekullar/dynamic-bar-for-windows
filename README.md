@@ -36,6 +36,7 @@ açıp yazı yazar, iş bitince haber verir, izin isterken karar vermeni bardan 
 - **Dört mod:** yüzen, yüzen (yalnızca masaüstünde), üste yapışık, yapışık (yalnızca masaüstünde). Yapışık modda ekranın üstünde görev çubuğu gibi yer ayrılır (Ayarlar > Üstte pencerelere yer bırak).
 - **Kargo:** Bir dosyayı sürükleyip adanın üstüne getir; hedefi seç (Drive/OneDrive/Dropbox klasörü, kendi klasörlerin, Telegram, Discord, WhatsApp), maskot götürür. Hedefler Ayarlar > Gönder'de. Komut satırından: `dynbar send dosya --to drive`.
   - Klasör hedefleri: Google Drive, OneDrive veya Dropbox masaüstü uygulaması kuruluysa içindeki `Dynamic Bar` alt klasörüne kopyalar.
+  - Phoneix (telefon bağlantısı) çalışıyor ve bir telefonla eşleşmişse "Telefon" hedefi kendiliğinden çıkar: `dynbar send dosya --to telefon`. Klasör gönderilmez.
   - Telegram (50 MB) ve Discord webhook (25 MB) klasör kabul etmez. WhatsApp yarı otomatiktir: dosyayı panoya koyar, sohbeti açar, sen Ctrl+V yaparsın.
 
 ## Kurulum

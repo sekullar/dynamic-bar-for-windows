@@ -27,15 +27,15 @@ function label(tool, input) {
   input = input || {};
   const base = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || '';
   const t = String(tool || '');
-  if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(t)) return ['Kod yazıyor', base(input.file_path || input.notebook_path)];
-  if (t === 'Bash' || t === 'PowerShell') return ['Komut çalıştırıyor', String(input.command || '').trim().split(/\s+/).slice(0, 3).join(' ')];
-  if (/^(Read|Glob|Grep|LS)$/.test(t)) return ['Dosyalara bakıyor', base(input.file_path || input.path) || String(input.pattern || '')];
-  if (/^(WebSearch|WebFetch)$/.test(t)) return ['İnternette arıyor', String(input.query || input.url || '').slice(0, 40)];
-  if (/^(Agent|Task)$/.test(t)) return ['Yardımcı ajan çalıştırıyor', String(input.description || '').slice(0, 40)];
-  if (t === 'TodoWrite') return ['Plan yapıyor', ''];
-  if (/computer|browser|chrome/i.test(t)) return ['Ekranı kontrol ediyor', ''];
-  if (t.startsWith('mcp__')) return ['Araç kullanıyor', t.split('__').slice(1).join(' · ').slice(0, 40)];
-  return ['Çalışıyor', t];
+  if (/^(Edit|Write|MultiEdit|NotebookEdit)$/.test(t)) return ['Kod yazıyor', base(input.file_path || input.notebook_path), 'type'];
+  if (t === 'Bash' || t === 'PowerShell') return ['Komut çalıştırıyor', String(input.command || '').trim().split(/\s+/).slice(0, 3).join(' '), 'run'];
+  if (/^(Read|Glob|Grep|LS)$/.test(t)) return ['Dosyalara bakıyor', base(input.file_path || input.path) || String(input.pattern || ''), 'read'];
+  if (/^(WebSearch|WebFetch)$/.test(t)) return ['İnternette arıyor', String(input.query || input.url || '').slice(0, 40), 'search'];
+  if (/^(Agent|Task)$/.test(t)) return ['Yardımcı ajan çalıştırıyor', String(input.description || '').slice(0, 40), 'agent'];
+  if (t === 'TodoWrite') return ['Plan yapıyor', '', 'think'];
+  if (/computer|browser|chrome/i.test(t)) return ['Ekranı kontrol ediyor', '', 'screen'];
+  if (t.startsWith('mcp__')) return ['Araç kullanıyor', t.split('__').slice(1).join(' · ').slice(0, 40), 'type'];
+  return ['Çalışıyor', t, 'type'];
 }
 
 // "Claude yanıtı" metninden en çok 10 kelimelik özet (yedek yöntem)
@@ -94,8 +94,8 @@ async function main() {
 
   if (ev === 'UserPromptSubmit' || ev === 'PreToolUse') {
     if (!cfg.live) return;
-    const [what, detail] = ev === 'PreToolUse' ? label(h.tool_name, h.tool_input) : ['Düşünüyor', ''];
-    await post('/notify', { key: 'claude', title: 'Claude Code çalışıyor', text: detail ? what + ' · ' + detail : what, icon: '💻', mood: 'working', sticky: true, app: proj, stat: 'work' });
+    const [what, detail, pose] = ev === 'PreToolUse' ? label(h.tool_name, h.tool_input) : ['Düşünüyor', '', 'think'];
+    await post('/notify', { key: 'claude', title: 'Claude Code çalışıyor', text: detail ? what + ' · ' + detail : what, icon: '💻', mood: 'working', pose, sticky: true, app: proj, stat: 'work' });
   } else if (ev === 'Notification') {
     if (h.notification_type === 'permission_prompt' && cfg.ask) return; // bardaki Onayla/Reddet zaten gösteriyor
     await post('/notify', { title: 'Claude seni bekliyor', text: String(h.message || 'Onay gerekiyor').slice(0, 120), icon: '🔔', mood: 'alert', ttl: 8, priority: 'high', app: 'Claude Code' });

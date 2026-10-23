@@ -168,8 +168,14 @@ const quiet = () => {
 };
 const mutedApp = (a) => a.app && String(settings.mutedApps || '').toLowerCase().split(/[,\n]+/).map((x) => x.trim()).filter(Boolean).includes(String(a.app).toLowerCase());
 const suppressed = (a) => !a.force && (settings.dnd || quiet() || (focus && settings.focusDnd !== false));
+const cbs = new Map(); // bildirim düğmelerinin geri çağrıları: cbId -> {url, data}
 const send = (a) => {
   if (!alive(win)) return;
+  if (a.cbUrl) {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    cbs.set(id, { url: a.cbUrl, data: a.cbData || '' }); if (cbs.size > 100) cbs.delete(cbs.keys().next().value);
+    a = { ...a, cbId: id }; delete a.cbUrl; delete a.cbData;
+  }
   if (!a.force && mutedApp(a)) return;
   if (suppressed(a)) { // bastırılan bildirimler "kaçırılanlar" listesine girer
     if (a.title && !a.key) { missed.push({ title: a.title, text: a.text || '', app: a.app || '', t: Date.now() }); if (missed.length > 20) missed.shift(); }
@@ -271,12 +277,18 @@ function sanitize(o) { // dışarıdan gelen veriyi yalnızca bilinen alanlarla 
   const a = {};
   for (const k of ['title', 'text', 'app', 'icon']) if (typeof o[k] === 'string') a[k] = o[k].slice(0, k === 'text' ? 200 : k === 'icon' ? 8 : 80);
   if (['happy', 'alert', 'music', 'idle', 'claude', 'working', 'sad', 'drink', 'yawn', 'hungry', 'sleepy'].includes(o.mood)) a.mood = o.mood;
+  if (['type', 'run', 'read', 'search', 'think', 'agent', 'screen'].includes(o.pose)) a.pose = o.pose; // Claude çalışırken maskot duruşu
   if (o.type === 'timer') { a.type = 'timer'; a.seconds = clamp(+o.seconds || 10, 1, 86400); }
   if (isFinite(+o.ttl) && +o.ttl > 0) a.ttl = Math.min(+o.ttl, 600);
   if (o.progress != null && isFinite(+o.progress)) a.progress = clamp(+o.progress, 0, 1);
   if (typeof o.key === 'string' && o.key) a.key = o.key.slice(0, 60);
   if (typeof o.color === 'string' && /^#[0-9a-f]{6}$/i.test(o.color)) a.color = o.color;
   if (typeof o.url === 'string' && /^(https?:\/\/|mailto:)/i.test(o.url)) a.url = o.url.slice(0, 500);
+  if (Array.isArray(o.actions) && typeof o.callback === 'string' && /^http:\/\/127\.0\.0\.1:\d{2,5}\/[\w\-\/]{1,80}$/.test(o.callback)) { // düğmeler: basılınca o yerel adrese POST {action, data} gider
+    const acts = o.actions.slice(0, 3).filter((x) => x && typeof x.id === 'string' && x.id && typeof x.label === 'string' && x.label)
+      .map((x) => ({ id: x.id.slice(0, 20), label: x.label.slice(0, 14), keep: x.keep === true, input: x.input === true }));
+    if (acts.length) { a.actions = acts; a.cbUrl = o.callback; if (typeof o.data === 'string') a.cbData = o.data.slice(0, 200); }
+  }
   if (o.sticky === true) a.sticky = true;
   if (o.priority === 'high') { a.priority = 'high'; a.force = true; } // yüksek öncelik: rahatsız etmeyi aşar, sıranın başına geçer
   if (o.force === true) a.force = true;
@@ -350,6 +362,18 @@ function handleAsk(req, res) {
     send(a);
   });
 }
+// Satır içi yazma (yanıt kutusu): ada pencere odak almaz; yazarken geçici olarak odaklanabilir yapılır, bitince geri alınır
+ipcMain.on('typing', (_e, v) => {
+  if (!alive(win)) return;
+  try {
+    if (v) { win.setFocusable(true); win.focus(); win.webContents.focus(); }
+    else { win.blur(); win.setFocusable(false); }
+  } catch (e) { LOG('typing', e.message); }
+});
+ipcMain.on('notif-action', (_e, d) => { // bildirim düğmesi: göndericiye haber ver (yanıt beklenmez)
+  const c = d && typeof d.cbId === 'string' && cbs.get(d.cbId); if (!c || typeof d.action !== 'string') return;
+  fetch(c.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: d.action.slice(0, 20), data: c.data, ...(typeof d.text === 'string' && d.text ? { text: d.text.slice(0, 2000) } : {}) }), signal: AbortSignal.timeout(3000) }).catch(() => {});
+});
 ipcMain.on('ask-answer', (_e, d) => {
   const x = d && asks.get(d.id); if (x) x.finish(d.answer === 'allow' || d.answer === 'deny' ? d.answer : 'dismissed');
 });

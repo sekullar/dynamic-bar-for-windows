@@ -26,6 +26,16 @@ function autoFolders() { // Drive / OneDrive / Dropbox eşitleme klasörleri; i�
   return out;
 }
 
+// Phoneix (telefon bağlantısı) çalışıyor ve bir telefonla eşleşmişse "Telefon" hedefi görünür. Bulunma: ~/.dynbar-ecosystem/phoneix.json
+function phoneixLink() {
+  try {
+    const l = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.dynbar-ecosystem', 'phoneix.json'), 'utf8'));
+    if (!l || l.app !== 'phoneix' || !Number.isInteger(l.port) || !l.paired) return null;
+    process.kill(l.pid, 0); // süreç yaşıyor mu (yoksa fırlatır)
+    return l;
+  } catch { return null; }
+}
+
 function list(settings, secret) {
   const out = [];
   if (settings.parcelAutoFolders !== false) autoFolders().forEach((f) => out.push(f));
@@ -35,6 +45,8 @@ function list(settings, secret) {
   });
   if (settings.parcelTgChat && secret('parcelTgToken')) out.push({ type: 'telegram', name: 'Telegram', icon: '✈️' });
   if (secret('parcelDiscord')) out.push({ type: 'discord', name: 'Discord', icon: '💬' });
+  const ph = phoneixLink();
+  if (ph) out.push({ type: 'phoneix', name: 'Telefon', icon: '📱' });
   out.push({ type: 'whatsapp', name: 'WhatsApp', icon: '🟢' });
   const seen = new Set();
   return out.map((d) => ({ ...d, id: d.type + ':' + slug(d.name) })).filter((d) => !seen.has(d.id) && seen.add(d.id));
@@ -155,7 +167,29 @@ async function toWhatsApp(dest, files, { progress, settings }) {
   return { text: 'Dosya panoda: sohbete gelince Ctrl+V', ttl: 9 };
 }
 
-const TYPES = { folder: toFolder, telegram: toTelegram, discord: toDiscord, whatsapp: toWhatsApp };
+// Telefona gönderim: Phoneix kuyruğa alır, telefon bağlıyken indirir. İlerleme Phoneix'ten sorulur.
+async function toPhoneix(dest, files, { progress }) {
+  const l = phoneixLink(); if (!l) throw new Error('Phoneix çalışmıyor veya telefon eşleşmemiş');
+  if (files.some((f) => f.isDir)) throw new Error('Klasör gönderilemez, dosya seç');
+  const call = async (method, route, body) => {
+    const r = await fetch('http://127.0.0.1:' + l.port + route, { method, headers: { Authorization: 'Bearer ' + l.token, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body), signal: AbortSignal.timeout(5000) });
+    return r.json().catch(() => ({}));
+  };
+  const q = await call('POST', '/send', { paths: files.map((f) => f.path) });
+  if (!q.ok) throw new Error(q.error || 'Phoneix kabul etmedi');
+  const t0 = Date.now();
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 400));
+    const j = await call('GET', '/job/' + q.job);
+    if (j.state === 'done') { progress(1); return { text: `${files.length === 1 ? files[0].name : files.length + ' dosya'} telefonda`, ttl: 6 }; }
+    if (j.state === 'error') throw new Error(j.error || 'Telefona gönderilemedi');
+    if (j.total) progress(Math.min(0.99, j.sent / j.total));
+    if (j.state === 'queued' && Date.now() - t0 > 15000) return { text: 'Sırada: telefon bağlanınca iner', ttl: 8 };
+    if (Date.now() - t0 > 30 * 60000) throw new Error('Zaman aşımı');
+  }
+}
+
+const TYPES = { phoneix: toPhoneix, folder: toFolder, telegram: toTelegram, discord: toDiscord, whatsapp: toWhatsApp };
 
 async function send(dest, files, ctx) {
   const fn = TYPES[dest.type];

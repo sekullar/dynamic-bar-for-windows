@@ -78,19 +78,74 @@
   #mascot[data-mood=sleep] .eye { animation:none; transform:scaleY(.12); }
   #mascot[data-mood=sleep] .zzz { opacity:1; animation:pulse 2.4s infinite; }
   /* Claude Code maskotuna dönüşüm: pembe maskot küçülüp kaybolur, turuncu blok maskot pırıltıyla belirir, sonra geri döner */
-  .lap { opacity:0; transform:translateY(12px); transform-box:fill-box; transition:opacity .3s, transform .6s var(--ease); }
-  .lap .lid { fill:#3b3b44; stroke:#6a6a78; stroke-width:.8; } .lap .lgo { fill:#d97757; } .lap .lbase { fill:#55555f; }
+  .lap { opacity:0; transform:translate(6px,8px); transform-box:fill-box; transition:opacity .3s, transform .6s var(--ease); }
+  .lap .lid { fill:#3b3b44; stroke:#6a6a78; stroke-width:.7; } .lap .lgo { fill:#d97757; } .lap .lbase { fill:#55555f; }
   .lap .paw { fill:var(--body); stroke:var(--ear); stroke-width:.6; }
-  .lap .code { font:700 6px ui-monospace,Consolas,monospace; fill:#8fe3a8; opacity:0; }
+  .lap .code { font:700 5.5px ui-monospace,Consolas,monospace; fill:#8fe3a8; opacity:0; }
+  /* çalışan maskot: yarım profil, laptoba doğru eğilmiş, kaşları çatık. Laptop sağda ve yüzü kapatmıyor (arkası ve Claude logosu görünür) */
+  .brow, .focusm { fill:none; stroke:#2a1a24; stroke-linecap:round; opacity:0; transition:opacity .3s; } .brow { stroke-width:1.3; } .focusm { stroke-width:1.5; }
+  .glow { fill:url(#glowg); opacity:0; transition:opacity .4s; pointer-events:none; }
+  .think, .mag, .mug, .chinpaw { opacity:0; transition:opacity .25s; pointer-events:none; }
+  .think circle { fill:#fff; opacity:0; } .mag circle { fill:none; stroke:#cfe8ff; stroke-width:1.2; } .mag path { stroke:#cfe8ff; stroke-width:1.5; stroke-linecap:round; }
+  .chinpaw { fill:var(--body); stroke:var(--ear); stroke-width:.6; }
+  .mug rect, .mug .mh { fill:#e9e3da; } .mug .mh { fill:none; stroke:#e9e3da; stroke-width:1.1; } .mug .steam { fill:none; stroke:#ffffff88; stroke-width:.7; stroke-linecap:round; }
+  #mascot[data-mood=working] .body-g { animation:workbob 2.4s ease-in-out infinite; }
   #mascot[data-mood=working] .lap { opacity:1; transform:none; }
-  #mascot[data-mood=working] .body-g { animation:none; transform:translateY(-1px); }
-  #mascot[data-mood=working] .eye { animation:none; transform:scaleY(.55) translateY(1px); }
-  #mascot[data-mood=working] .paw.p1 { animation:type .32s ease-in-out infinite; }
-  #mascot[data-mood=working] .paw.p2 { animation:type .32s ease-in-out .16s infinite; }
+  #mascot[data-mood=working] .eye { animation:blinkN 5s infinite; }
+  #mascot[data-mood=working] #eyes { animation:lookType 1s linear infinite; }
+  #mascot[data-mood=working] .mouth { display:none; }
+  #mascot[data-mood=working] .brow, #mascot[data-mood=working] .focusm { opacity:1; }
+  #mascot[data-mood=working] .brow, #mascot[data-mood=working] .focusm, #mascot[data-mood=working] .mouth { transform:translateX(2.2px); }
+  #mascot[data-mood=working] .glow { opacity:.5; animation:glowp 1.8s ease-in-out infinite; }
+  #mascot[data-mood=working] .paw.p1 { animation:type .22s ease-in-out infinite; }
+  #mascot[data-mood=working] .paw.p2 { animation:type .22s ease-in-out .11s infinite; }
   #mascot[data-mood=working] .code.c1 { animation:codeup 1.6s ease-out infinite; }
   #mascot[data-mood=working] .code.c2 { animation:codeup 1.6s ease-out .8s infinite; }
-  @keyframes type { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-2.2px); } }
+  /* ne yaptığına göre duruş: düşünme (çenede pati, kabarcıklar), okuma (gözler satır tarar), arama (büyüteç), komut (terminal), ajan (pırıltı) */
+  #mascot[data-mood=working][data-pose=think] #eyes { animation:lookThink 1s linear infinite; }
+  #mascot[data-mood=working][data-pose=think] .paw { animation:none; }
+  #mascot[data-mood=working][data-pose=think] .code { animation:none; opacity:0; }
+  #mascot[data-mood=working][data-pose=think] .think { opacity:1; } #mascot[data-mood=working][data-pose=think] .chinpaw { opacity:1; }
+  #mascot[data-mood=working][data-pose=think] .think circle { animation:tpop 1.8s ease-out infinite; }
+  #mascot[data-mood=working][data-pose=think] .think circle:nth-child(2) { animation-delay:.3s; } #mascot[data-mood=working][data-pose=think] .think circle:nth-child(3) { animation-delay:.6s; }
+  #mascot[data-mood=working][data-pose=read] #eyes, #mascot[data-mood=working][data-pose=screen] #eyes { animation:scan .85s ease-in-out infinite alternate; }
+  #mascot[data-mood=working][data-pose=read] .paw, #mascot[data-mood=working][data-pose=screen] .paw { animation:none; }
+  #mascot[data-mood=working][data-pose=search] #eyes { animation:lookSearch 1s linear infinite; }
+  #mascot[data-mood=working][data-pose=search] .mag { opacity:1; animation:magbob 1.3s ease-in-out infinite; }
+  #mascot[data-mood=working][data-pose=search] .brow { transform:translate(2.2px,-1.4px); }
+  #mascot[data-mood=working][data-pose=search] .eye { animation:none; transform:scaleY(1); }
+  #mascot[data-mood=working][data-pose=run] .code.c1 { animation:none; opacity:0; } #mascot[data-mood=working][data-pose=run] .code.c3 { animation:blink 1s steps(1) infinite; opacity:1; }
+  #mascot[data-mood=working][data-pose=agent] .spark { animation:sparkle 2.4s ease-out infinite; }
+  /* çalışırken ara sıra: kameraya bakıp gülümseme, bir yudum, gerinme */
+  #mascot[data-mood=working][data-sub=glance] #eyes { animation:lookCam 1s linear infinite; }
+  #mascot[data-mood=working][data-sub=glance] .mouth { display:block; transform:none; }
+  #mascot[data-mood=working][data-sub=glance] .focusm, #mascot[data-mood=working][data-sub=glance] .brow { opacity:0; }
+  #mascot[data-mood=working][data-sub=sip] .mug { opacity:1; animation:sipw 2.2s ease-in-out; }
+  #mascot[data-mood=working][data-sub=sip] .eye, #mascot[data-mood=working][data-sub=stretch] .eye { animation:none; transform:scaleY(.16); }
+  #mascot[data-mood=working][data-sub=sip] .focusm, #mascot[data-mood=working][data-sub=stretch] .focusm, #mascot[data-mood=working][data-sub=sip] .brow, #mascot[data-mood=working][data-sub=stretch] .brow { opacity:0; }
+  #mascot[data-mood=working][data-sub=sip] .mouth { display:block; transform:none; }
+  #mascot[data-mood=working][data-sub=stretch] .body-g { animation:stretchw 2.2s ease-in-out; }
+  #mascot[data-mood=working][data-sub=stretch] .yawnm { opacity:1; animation:yawnw 2.2s ease-in-out; transform-box:fill-box; transform-origin:center; }
+  @keyframes workbob { 0%,100% { transform:translate(-3px,1px) rotate(7deg); } 50% { transform:translate(-3px,1.7px) rotate(8.6deg); } }
+  @keyframes stretchw { 0%,100% { transform:translate(-3px,1px) rotate(7deg); } 45%,70% { transform:translate(-1px,-1px) rotate(0) scale(.94,1.12); } }
+  @keyframes blinkN { 0%,93%,100% { transform:scaleY(.72); } 96% { transform:scaleY(.1); } }
+  @keyframes lookType { 0%,100% { transform:translate(2.6px,1.4px); } }
+  @keyframes lookThink { 0%,100% { transform:translate(2.2px,-1.4px); } }
+  @keyframes lookSearch { 0%,100% { transform:translate(3.4px,-.8px); } }
+  @keyframes lookCam { 0%,100% { transform:translate(0,0); } }
+  @keyframes scan { from { transform:translate(.2px,1.6px); } to { transform:translate(4.8px,1.6px); } }
+  @keyframes glowp { 50% { opacity:.25; } }
+  @keyframes yawnw { 0%,100% { transform:scale(.3); } 40%,70% { transform:scale(1.1,1.35); } }
+  @keyframes tpop { 0% { opacity:0; transform:scale(.3); } 25%,70% { opacity:.9; transform:scale(1); } 100% { opacity:0; } }
+  @keyframes magbob { 50% { transform:translate(-1px,1.4px) rotate(-6deg); } }
+  @keyframes sipw { 0%,100% { transform:translate(0,0) rotate(0); } 30%,70% { transform:translate(8px,-3px) rotate(14deg); } }
+  @keyframes type { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-2px); } }
   @keyframes codeup { 0% { opacity:0; transform:translateY(5px); } 30% { opacity:1; } 100% { opacity:0; transform:translateY(-6px); } }
+  /* Claude çalışırken adada küçült düğmesi; küçültünce ada kapalı hapa iner, maskot çalışmaya devam eder */
+  #minbtn { z-index:5; position:absolute; top:8px; right:12px; width:22px; height:22px; border:0; border-radius:50%; background:#ffffff18; color:#fff; font:700 13px/1 system-ui; cursor:pointer; opacity:0; pointer-events:none; transition:opacity .25s, background .2s; padding:0; }
+  #minbtn:hover { background:#ffffff30; }
+  #island.claudework.expanded:not(.open):not(.ask) #minbtn { opacity:1; pointer-events:auto; transition-delay:.35s; }
+  #island.claudework #content { right:44px; }
   /* maskotun günlük yaşamı: esneme, acıkma, uykulu, su içme */
   .yawnm, .drool, .glass, .food { opacity:0; } .gl { fill:#ffffff40; stroke:#cfe8ff; stroke-width:.8; } .gw { fill:#6cc6ff; }
   .glass { transform-box:fill-box; transform-origin:0% 100%; transition:opacity .25s; }
@@ -121,9 +176,14 @@
   /* onay düğmeleri (bardan onay) */
   #acts { display:none; gap:8px; margin-top:8px; pointer-events:auto; }
   #acts button { flex:1; border:0; border-radius:10px; padding:6px 0; font:inherit; font-size:12.5px; font-weight:600; color:#fff; background:#ffffff1f; cursor:pointer; }
-  #acts button[data-a=allow] { background:#2f9e5b; } #acts button[data-a=deny] { background:#c84b4b; }
+  #acts button[data-a=allow], #acts button[data-a=answer] { background:#2f9e5b; } #acts button[data-a=deny], #acts button[data-a=reject], #acts button[data-a=hangup] { background:#c84b4b; }
   #acts button:hover { filter:brightness(1.15); }
   #island.ask { height:112px; } #island.ask #acts { display:flex; }
+  #replybox { display:none; gap:8px; margin-top:8px; pointer-events:auto; }
+  #island.typing #acts { display:none; } #island.typing #replybox { display:flex; }
+  #rin { flex:1; min-width:0; background:#ffffff1c; color:#fff; border:1px solid #ffffff30; border-radius:10px; padding:6px 10px; font:inherit; font-size:13px; outline:none; user-select:text; }
+  #rin:focus { border-color:var(--body); }
+  #rsend { border:0; border-radius:10px; width:34px; background:var(--body); color:#2a1a24; font-size:15px; font-weight:700; cursor:pointer; }
   .clawd { fill:#d97757; opacity:0; transform-box:fill-box; transform-origin:50% 100%; transform:scale(.3) rotate(-12deg); transition:opacity .25s, transform .5s var(--ease); }
   .clawd .ceye { fill:#1a1210; }
   .body-g { transition:opacity .25s, transform .5s var(--ease); }
@@ -197,11 +257,13 @@
 <body data-mode="float">
 <div id="stage"><div id="island">
   <svg id="mascot" viewBox="0 0 40 40" data-mood="idle">
+    <defs><radialGradient id="glowg"><stop offset="0" stop-color="#9fd8ff"/><stop offset="1" stop-color="#9fd8ff" stop-opacity="0"/></radialGradient></defs>
     <g class="body-g">
       <g id="ears"><polygon class="ear" points="8,16 10,4 19,12"/><polygon class="ear" points="32,16 30,4 21,12"/></g>
-      <ellipse class="body" cx="20" cy="23" rx="15" ry="13"/>
+      <ellipse class="body" cx="20" cy="23" rx="15" ry="13"/><ellipse class="glow" cx="25" cy="24" rx="10" ry="8"/>
       <g id="eyes"><ellipse class="eye" cx="14.5" cy="22" rx="1.9" ry="2.6"/><ellipse class="eye" cx="25.5" cy="22" rx="1.9" ry="2.6"/></g>
       <circle class="cheek" cx="10" cy="27" r="2.6"/><circle class="cheek" cx="30" cy="27" r="2.6"/>
+      <path class="brow" d="M11.8 18.6L17.4 20.2"/><path class="brow" d="M22.6 20.2L28.2 18.6"/><path class="focusm" d="M18.8 28h4.4"/>
       <path class="mouth" d="M17.5 27 Q20 29.5 22.5 27"/><path class="sadm" d="M17.5 29 Q20 26.2 22.5 29"/><ellipse class="yawnm" cx="20" cy="28.2" rx="2.4" ry="3"/><path class="drool" d="M23.6 29.4q1.1 2.2 0 3.2q-1.1-1 0-3.2z"/><g id="acc"></g>
     </g>
     <g class="courier">
@@ -210,11 +272,15 @@
       <ellipse class="cpaw" cx="10.5" cy="31" rx="2.3" ry="2.6"/><ellipse class="cpaw" cx="29.5" cy="31" rx="2.3" ry="2.6"/>
     </g>
     <g class="lap">
-      <rect x="9" y="20" width="22" height="13" rx="2" class="lid"/><path class="lgo" d="M20 24l1 2.4 2.4 1-2.4 1-1 2.4-1-2.4-2.4-1 2.4-1z"/>
-      <path d="M5 33.5h30l-2 3H7z" class="lbase"/>
-      <ellipse class="paw p1" cx="13" cy="31" rx="2.4" ry="2"/><ellipse class="paw p2" cx="27" cy="31" rx="2.4" ry="2"/>
-      <text class="code c1" x="29" y="12">&lt;/&gt;</text><text class="code c2" x="3" y="14">{ }</text>
+      <path class="lid" d="M28.5 21.5L38.5 20V32L28.5 33.5z"/><path class="lgo" d="M34 23.6l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/>
+      <path class="lbase" d="M27.5 33.3L39 32l1 2.6-13.2 1.7z"/>
+      <ellipse class="paw p1" cx="25.2" cy="33.6" rx="2.3" ry="1.8"/><ellipse class="paw p2" cx="28.4" cy="35" rx="2.3" ry="1.8"/>
+      <text class="code c1" x="30" y="17">&lt;/&gt;</text><text class="code c2" x="1" y="13">{ }</text><text class="code c3" x="30" y="17">&gt;_</text>
     </g>
+    <ellipse class="chinpaw" cx="21" cy="31.5" rx="2.6" ry="2.1"/>
+    <g class="think"><circle cx="31" cy="12" r=".9"/><circle cx="33.4" cy="8.6" r="1.3"/><circle cx="36" cy="4.6" r="1.9"/></g>
+    <g class="mag"><circle cx="31" cy="12" r="3"/><path d="M33.2 14.3l3.2 3.2"/></g>
+    <g class="mug"><rect x="1" y="27" width="7" height="6.5" rx="1.2"/><path class="mh" d="M8 28.4q3.2.2 3.2 2.3t-3.2 2"/><path class="steam" d="M3.4 25q-1-1.4 0-2.8M6 25q-1-1.4 0-2.8"/></g>
     <path class="sweat" d="M31 10q2 3 0 4.6q-2-1.6 0-4.6z"/>
     <g class="glass"><path d="M26 19h9l-1.3 12h-6.4z" class="gl"/><path d="M27.2 23h6.6l-.7 7.4h-5.2z" class="gw"/></g>
     <text class="food" x="25" y="9" font-size="9">🍖</text>
@@ -229,8 +295,9 @@
   </svg>
   <div class="dots"><i></i><i></i><i></i></div>
   <div class="eq"><i></i><i></i><i></i><i></i></div><span class="ptime"></span>
-  <div id="content"><div id="title"></div><div id="text"></div><div id="bar"><b></b><span id="rdest"></span></div><div id="acts"></div></div>
+  <div id="content"><div id="title"></div><div id="text"></div><div id="bar"><b></b><span id="rdest"></span></div><div id="acts"></div><div id="replybox"><input id="rin" type="text" maxlength="2000" placeholder="Yanıtın…  (Enter gönder, Esc iptal)" autocomplete="off" spellcheck="false"><button id="rsend" aria-label="Gönder">↩</button></div></div>
   <button id="close" aria-label="Kapat">✕</button>
+  <button id="minbtn" aria-label="Küçült" title="Küçült (çift tıkla: genişlet)">–</button>
   <div id="panel">
     <div id="track">
       <section id="media" data-feat="pageMedia">
