@@ -7,7 +7,9 @@
 // Hook asla Claude Code'u engellemez: bar kapalıysa veya hata olursa sessizce 0 ile çıkar.
 const fs = require('fs'), { spawn } = require('child_process');
 if (process.env.DYNBAR_CHILD) process.exit(0); // kendi başlattığımız "claude -p" özet çağrısında tekrar tetiklenme
-const BASE = process.env.DYNBAR_URL || 'http://127.0.0.1:47800', TOKEN = process.env.DYNBAR_TOKEN || '';
+// Ortam değişkeni yoksa Dynamic Bar'ın bağlantı dosyasından (~/.dynbar-ecosystem/dynamic-bar.json) port ve anahtar okunur
+const LINK = (() => { try { const l = JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(), '.dynbar-ecosystem', 'dynamic-bar.json'), 'utf8')); return l && l.app === 'dynamic-bar' ? l : {}; } catch { return {}; } })();
+const BASE = process.env.DYNBAR_URL || (LINK.port ? 'http://127.0.0.1:' + LINK.port : 'http://127.0.0.1:47800'), TOKEN = process.env.DYNBAR_TOKEN || LINK.token || '';
 const HEAD = { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) };
 let raw = '';
 const hard = setTimeout(() => process.exit(0), 70000); // güvenlik: asla takılma

@@ -5,6 +5,19 @@ Adres: `http://127.0.0.1:47800` (WebSocket: `ws://127.0.0.1:47800`). Yalnızca b
 tarayıcıdan (Origin başlığı olan) ve yanlış Host başlıklı istekler reddedilir. Ayarlardan kapatılabilir veya
 **API anahtarı** tanımlanabilir (anahtar varsa `Authorization: Bearer ANAHTAR` veya `?token=ANAHTAR` gerekir).
 
+### Port ve anahtarı bulmak
+
+API açıkken Dynamic Bar, bu kullanıcının programları için `~/.dynbar-ecosystem/dynamic-bar.json` dosyasını yazar
+(Windows: `%USERPROFILE%.dynbar-ecosystemdynamic-bar.json`):
+
+```json
+{ "app": "dynamic-bar", "port": 47800, "token": "ANAHTAR veya boş", "pid": 1234, "version": "0.4.0" }
+```
+
+Anahtar yapıştırmak gerekmez: `dynbar`, `integrations/` altındaki istemciler ve Spotlight bu dosyadan okur
+(`DYNBAR_URL` ve `DYNBAR_TOKEN` ortam değişkenleri varsa onlar öncelik alır). Dosya uygulama kapanınca silinir;
+sert kapanırsa eski kalabilir, bağlantı kurulamazsa yok say. Anahtar yalnızca senin kullanıcı klasöründe durur.
+
 ## Bildirim: `POST /notify`
 
 ```json
@@ -40,6 +53,13 @@ Dizi gönderirsen (en çok 10) hepsi sırayla gösterilir. Saniyede çok fazla i
 | `POST /remind` | `{"minutes":10,"text":"çayı al"}` veya `seconds` | Gecikmeli hatırlatıcı (uygulama kapanınca silinir) |
 | `POST /todo` | `{"add":"metin"}`, `{"toggle":0}`, `{"clear":true}` | Yapılacaklar listesi |
 | `GET /status` | | `{dnd, focus, quiet, todos, media}` |
+| `POST /search` | `{"mode":"open|close|toggle"}` | Spotlight aramasını adada açar (Spotlight çalışıyor olmalı) |
+| `GET /destinations` | | Kargo hedefleri: `[{id, name}]` |
+| `POST /send` | `{"paths":["C:\a.zip"],"to":"drive","wait":true}` | Dosya veya klasörleri kargoyla gönderir, maskot götürür |
+
+**`/send`** dosya çıkaran tek uçtur; bu yüzden **yalnızca API anahtarı tanımlıyken** çalışır (anahtarsızken 403). `paths` tam yol olmalı.
+`to`, `/destinations` listesindeki `id` veya ad (büyük/küçük harf fark etmez, ad başı yeter). `wait: true` ile yanıt teslimattan sonra gelir:
+`{"dest":"Google Drive","files":1,"ok":true}` veya `{"ok":false,"error":"..."}`. Hedefler Ayarlar > Gönder bölümünden tanımlanır.
 
 ## WebSocket
 
@@ -56,8 +76,11 @@ dynbar progress indirme 40 "%40"         # canlı ilerleme (aynı anahtar günce
 dynbar remind 10m "Çayı al"
 dynbar dnd on
 dynbar todo add "Faturayı öde"
+dynbar send rapor.pdf --to drive         # kargo: maskot götürür (API anahtarı gerekir)
+dynbar send --list                       # hedefleri göster
+npm test 2>&1 | dynbar send - --to telegram --name test-cikti.txt   # çıktıyı dosya olarak gönder
 ```
-Anahtar tanımladıysan: `set DYNBAR_TOKEN=anahtar` (PowerShell: `$env:DYNBAR_TOKEN="anahtar"`).
+Port ve anahtar otomatik bulunur (yukarıdaki bağlantı dosyası). Elle vermek için: `$env:DYNBAR_TOKEN="anahtar"`.
 
 ## Örnekler
 

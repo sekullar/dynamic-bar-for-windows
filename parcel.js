@@ -141,8 +141,30 @@ ipcMain.handle('parcel:send', (e, id) => {
 // ---------- teslimat ----------
 const sizeText = (n) => (n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
 function deliver(dest, files) { // işler sırayla çalışır: aynı anda birden çok kargo "parcel" bildirimini karıştırmasın
-  jobs = jobs.then(() => run(dest, files)).catch(() => {});
-  return jobs;
+  const p = jobs.then(() => run(dest, files));
+  jobs = p.catch(() => {});
+  return p;
+}
+
+// Dış programlar için (POST /send, dynbar send): yollar ve hedef adı/kimliği ile doğrudan teslimat. Seçim penceresi açılmaz.
+function match(query) {
+  const all = destinations.list(ctx.settings(), ctx.secret), q = String(query || '').trim().toLowerCase();
+  if (!q) return null;
+  return all.find((d) => d.id.toLowerCase() === q || d.name.toLowerCase() === q) || all.find((d) => d.name.toLowerCase().startsWith(q) || d.type === q) || all.find((d) => d.name.toLowerCase().includes(q)) || null;
+}
+const list = () => destinations.list(ctx.settings(), ctx.secret).map((d) => ({ id: d.id, name: d.name }));
+async function sendTo(paths, query) {
+  if (ctx.settings().parcel === false) throw new Error('kargo ayarlardan kapalı');
+  const dest = match(query); if (!dest) throw new Error('hedef bulunamadı: ' + query);
+  const files = [];
+  for (const p of (Array.isArray(paths) ? paths : []).slice(0, MAX_FILES)) {
+    if (typeof p !== 'string' || !path.isAbsolute(p)) continue;
+    try { const st = fs.statSync(p); files.push({ path: p, name: path.basename(p), isDir: st.isDirectory(), size: st.isDirectory() ? 0 : st.size }); } catch {}
+  }
+  if (!files.length) throw new Error('geçerli dosya yok (tam yol ver)');
+  await Promise.all(files.filter((f) => f.isDir).map(async (f) => { try { f.size = await destinations.sizeOf(f.path); } catch {} }));
+  const r = await deliver(dest, files);
+  return { dest: dest.name, files: files.length, ...r };
 }
 async function run(dest, files) {
   const what = files.length === 1 ? files[0].name : files.length + ' dosya', total = files.reduce((a, f) => a + f.size, 0);
@@ -153,13 +175,16 @@ async function run(dest, files) {
   try {
     const r = await destinations.send(dest, files, { progress, secret: ctx.secret, settings: ctx.settings() });
     ctx.send({ ...base, parcel: { ...base.parcel, done: true }, mood: 'happy', title: 'Teslim edildi', text: r.text || `${what} · ${dest.name}`, progress: 1, ttl: r.ttl || 5, url: r.url });
+    return { ok: true, text: r.text || '' };
   } catch (err) {
-    ctx.send({ ...base, mood: 'sad', title: 'Teslim edilemedi', text: String((err && err.message) || err).slice(0, 110), ttl: 9 });
+    const msg = String((err && err.message) || err).slice(0, 110);
+    ctx.send({ ...base, mood: 'sad', title: 'Teslim edilemedi', text: msg, ttl: 9 });
+    return { ok: false, error: msg };
   }
 }
 
 module.exports = {
   init: (c) => { ctx = c; if (!tickT) tickT = setInterval(tick, 60); }, // {win, settings, secret, preload, send, onState, busy}
   isOpen, close, destroy: () => { clearInterval(tickT); tickT = null; destroyNow(); },
-  deliver, _open: open
+  deliver, sendTo, list, _open: open
 };

@@ -1,5 +1,5 @@
 const { app, BrowserWindow, Tray, Menu, screen, globalShortcut, ipcMain, nativeImage, powerMonitor, clipboard, shell, safeStorage } = require('electron');
-const http = require('http'), path = require('path'), fs = require('fs'), { spawn } = require('child_process');
+const http = require('http'), os = require('os'), path = require('path'), fs = require('fs'), { spawn } = require('child_process');
 const extras = require('./extras');
 const vdesk = require('./vdesk');
 const spotlight = require('./spotlight');
@@ -37,7 +37,7 @@ const DEFAULTS = {
   pomoFocus: 25, pomoBreak: 5, pomoLong: 15, pomoRounds: 4,
   // bildirimler ve ekosistem
   batteryToasts: true, dnd: false, quietOn: false, quietFrom: '23:00', quietTo: '07:00', waterEvery: 0, eyeBreak: false,
-  mediaToasts: true, artOnline: true, osd: true, api: true, apiToken: '', mutedApps: '', focusDnd: true, sound: 'off', spotlightSearch: true,
+  mediaToasts: true, artOnline: true, osd: true, osdVol: true, osdBri: true, osdHideWin: false, api: true, apiToken: '', mutedApps: '', focusDnd: true, sound: 'off', spotlightSearch: true,
   // Claude Code: canlı durum (laptop maskotu), bardan onay, yapay zekâ özeti
   claudeLive: true, claudeAsk: true, claudeAi: true, pageClaude: true,
   // kargo: dosyayı adaya sürükleyip bırak, maskot götürsün. Gizli değerler (parcelTgToken, parcelDiscord) şifreli saklanır (aşağıda SECRET)
@@ -222,7 +222,7 @@ const broadcast = () => [win, settingsWin].forEach((w) => alive(w) && w.webConte
 function applyPatch(p, reset) {
   const wasDnd = settings.dnd;
   settings = reset ? { ...DEFAULTS, todos: settings.todos } : { ...settings, ...pickKnown(sealSecrets(p)) };
-  save(); updateVisibility(); broadcast(); extras.apply(); regKeys(); reserve();
+  save(); updateVisibility(); broadcast(); extras.apply(); regKeys(); reserve(); syncLink();
   if (wasDnd && !settings.dnd) flushMissed();
 }
 
@@ -366,6 +366,33 @@ function handleSearch(req, reply) {
   });
 }
 
+// POST /send {paths:[...], to:"drive", wait?:true}: dosyaları kargoyla bir hedefe yollar (seçim penceresi açılmaz). GET /destinations hedefleri listeler.
+// Dosya çıkaran tek komut olduğu için yalnızca anahtar tanımlıyken çalışır: anahtarsız API'ye her program erişebilir.
+function handleSend(req, res, reply) {
+  if (!settings.apiToken) return reply(403, 'anahtar gerekli: Ayarlar > API anahtarı tanımla');
+  let body = '';
+  req.on('data', (d) => { if (body.length < 65536) body += d; });
+  req.on('end', async () => {
+    let o; try { o = JSON.parse(body || '{}'); } catch { return reply(400, 'bad json'); }
+    const run = parcel.sendTo(o.paths, o.to);
+    if (o.wait !== true) { run.catch(() => {}); return reply(200, 'ok'); }
+    try { reply(200, JSON.stringify(await run)); } catch (e) { reply(400, String((e && e.message) || e)); }
+  });
+}
+
+// Bağlantı dosyası: ~/.dynbar-ecosystem/dynamic-bar.json. Aynı kullanıcının programları (Spotlight, dynbar, betikler) port ve anahtarı
+// buradan okur; elle anahtar yapıştırmak gerekmez. API kapalıyken veya çıkışta silinir.
+const LINK_DIR = path.join(os.homedir(), '.dynbar-ecosystem'), LINK_FILE = path.join(LINK_DIR, 'dynamic-bar.json');
+function syncLink() {
+  try {
+    if (settings.api) {
+      fs.mkdirSync(LINK_DIR, { recursive: true });
+      fs.writeFileSync(LINK_FILE, JSON.stringify({ app: 'dynamic-bar', port: PORT, token: settings.apiToken || '', pid: process.pid, version: app.getVersion() }));
+    } else removeLink();
+  } catch {}
+}
+function removeLink() { try { if (JSON.parse(fs.readFileSync(LINK_FILE, 'utf8')).pid === process.pid) fs.unlinkSync(LINK_FILE); } catch {} }
+
 // Hata günlüğü: userData/log.txt (en çok ~200 KB; aşınca yarıya kırpılır). Tray menüsünden açılır.
 function LOG(...a) {
   try {
@@ -432,6 +459,8 @@ function startServer() {
     if (req.method === 'GET' && u.pathname === '/status') return reply(200, handleApi('status'));
     if (req.method === 'POST' && u.pathname === '/ask') return handleAsk(req, res);
     if (req.method === 'POST' && u.pathname === '/search') return handleSearch(req, reply);
+    if (req.method === 'POST' && u.pathname === '/send') return handleSend(req, res, reply);
+    if (req.method === 'GET' && u.pathname === '/destinations') return reply(200, JSON.stringify(parcel.list()));
     const cmd = u.pathname.slice(1);
     if (req.method !== 'POST' || !POST_CMDS.includes(cmd)) return reply(404, 'not found');
     let body = '', size = 0;
@@ -468,6 +497,7 @@ function createTray() {
     { type: 'separator' },
     ...demos.map((d, i) => ({ label: 'Test: ' + d.title, click: () => send({ ...demos[i], force: true }) })),
     { type: 'separator' },
+    { label: 'Yeniden başlat', click: () => { app.relaunch(); app.quit(); } },
     { label: 'Çıkış', click: () => app.quit() }
   ]));
 }
@@ -561,7 +591,7 @@ ipcMain.on('dom-click', () => { lastDomClick = Date.now(); });ipcMain.on('raise'
 ipcMain.on('test', demo);
 
 app.whenReady().then(() => {
-  load(); createWindow(); createTray(); startServer(); startWatchers();
+  load(); createWindow(); createTray(); startServer(); syncLink(); startWatchers();
   spotlight.init({ win: () => win, settings: masked, preload, onState: overlayChanged });
   parcel.init({ win: () => win, settings: () => settings, secret: getSecret, preload, send, onState: overlayChanged, busy: () => spotlight.isOpen() });
   if (process.platform === 'win32') { // koffi yoksa sanal masaüstü taşıma ve yedek tıklama çalışmaz: sessizce bozulmasın, kullanıcıya söyle
@@ -576,5 +606,5 @@ app.whenReady().then(() => {
   ['display-added', 'display-removed', 'display-metrics-changed'].forEach((e) => screen.on(e, recover));
   ['resume', 'unlock-screen'].forEach((e) => powerMonitor.on(e, recover));
 });
-app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); });
+app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); });
 app.on('window-all-closed', (e) => e.preventDefault()); // ayar penceresi kapanınca uygulama kapanmasın

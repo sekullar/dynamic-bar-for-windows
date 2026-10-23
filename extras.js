@@ -1,5 +1,6 @@
 // Ana süreç eklentileri: sistem istatistiği, pano, takvim, ses/parlaklık OSD, ekran seçimi, otomatik başlatma, WebSocket
 const { clipboard, screen, app, ipcMain, shell } = require('electron');
+const volkeys = require('./volkeys');
 const os = require('os'), crypto = require('crypto'), fs = require('fs'), path = require('path');
 let ctx, clips = [], lastClip = '', events = [], notified = new Set(), procs = {}, seen = {}, lastCpu = os.cpus(), lastCal = null, lastWx = null, weather = null, lx = -1, ly = -1, rates = null, lastRates = null, recentList = [];
 const S = () => ctx.settings();
@@ -62,6 +63,8 @@ function osd(l) { // "vol 45 0" | "bri 60": ilk değer gösterilmez, sonraki de�
   const [k, a, b] = l.split(' '), v = +a, m = b === '1', sig = v + '|' + m;
   if (!(k in seen)) { seen[k] = sig; return; }
   if (seen[k] === sig) return; seen[k] = sig;
+  if (k === 'vol' && S().osdVol === false) return; // değer izlenir ama bar göstermez
+  if (k === 'bri' && S().osdBri === false) return;
   if (k === 'vol') ctx.send({ key: 'osd-vol', title: m ? 'Ses kapalı' : 'Ses', text: m ? '' : v + '%', progress: m ? 0 : v / 100, ttl: 1.6, mood: 'happy' });
   else if (k === 'bri') ctx.send({ key: 'osd-bri', title: 'Parlaklık', text: v + '%', progress: v / 100, ttl: 1.6, mood: 'happy' });
 }
@@ -80,6 +83,7 @@ function apply() {
   const win32 = process.platform === 'win32';
   if (!s.osd) seen = {};
   sync('vol', 'volume.ps1', s.osd && win32, osd);
+  if (s.osdHideWin && win32) volkeys.start(ctx.ps); else volkeys.stop(); // Windows'un ses göstergesini ses tuşlarını yakalayarak engeller
   sync('net', 'net.ps1', s.pageSystem && win32, (l) => { const [, d, u] = l.split(' '); toWin('net', { down: +d, up: +u }); });
   const key = s.pageCalendar + '|' + s.icsUrl;
   if (key !== lastCal) { lastCal = key; loadCalendar(); }
@@ -180,4 +184,4 @@ function init(c) {
   setInterval(sys, 2000); setInterval(clip, 1000); setInterval(calTick, 30000); setInterval(loadCalendar, 600000);
   apply();
 }
-module.exports = { init, apply, place, attachWs, stop: () => Object.values(procs).forEach((p) => p && p.kill()), _setCtx: (c) => (ctx = c) };
+module.exports = { init, apply, place, attachWs, stop: () => { volkeys.stop(); Object.values(procs).forEach((p) => p && p.kill()); }, _setCtx: (c) => (ctx = c) };

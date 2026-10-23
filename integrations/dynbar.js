@@ -2,7 +2,9 @@
 //   const dynbar = require('./dynbar');
 //   dynbar.notify({ title: 'Deploy', text: 'Bitti', icon: '🚀', mood: 'happy' });
 //   dynbar.progress('indirme', 0.4, { title: 'İndiriliyor', text: '%40' });
-const BASE = process.env.DYNBAR_URL || 'http://127.0.0.1:47800', TOKEN = process.env.DYNBAR_TOKEN || '';
+// Ortam değişkeni yoksa Dynamic Bar'ın bağlantı dosyasından (~/.dynbar-ecosystem/dynamic-bar.json) port ve anahtar okunur
+const LINK = (() => { try { const l = JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(), '.dynbar-ecosystem', 'dynamic-bar.json'), 'utf8')); return l && l.app === 'dynamic-bar' ? l : {}; } catch { return {}; } })();
+const BASE = process.env.DYNBAR_URL || (LINK.port ? 'http://127.0.0.1:' + LINK.port : 'http://127.0.0.1:47800'), TOKEN = process.env.DYNBAR_TOKEN || LINK.token || '';
 const call = (route, body, method = 'POST') => fetch(BASE + route, {
   method, headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) },
   body: method === 'POST' ? JSON.stringify(body || {}) : undefined, signal: AbortSignal.timeout(2000)

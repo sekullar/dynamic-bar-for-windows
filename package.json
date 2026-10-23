@@ -34,6 +34,7 @@
       "extras.js",
       "extras-ui.js",
       "vdesk.js",
+      "volkeys.js",
       "spotlight.js",
       "appbar.js",
       "parcel.js",

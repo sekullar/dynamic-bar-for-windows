@@ -8,8 +8,14 @@ import json
 import os
 import urllib.request
 
-BASE = os.environ.get("DYNBAR_URL", "http://127.0.0.1:47800")
-TOKEN = os.environ.get("DYNBAR_TOKEN", "")
+# Ortam değişkeni yoksa ~/.dynbar-ecosystem/dynamic-bar.json dosyasından port ve anahtar okunur
+try:
+    with open(os.path.join(os.path.expanduser("~"), ".dynbar-ecosystem", "dynamic-bar.json"), encoding="utf-8") as _f:
+        _link = json.load(_f)
+except Exception:
+    _link = {}
+BASE = os.environ.get("DYNBAR_URL") or ("http://127.0.0.1:%s" % _link["port"] if _link.get("port") else "http://127.0.0.1:47800")
+TOKEN = os.environ.get("DYNBAR_TOKEN") or _link.get("token", "")
 
 
 def _call(route, body=None, method="POST"):

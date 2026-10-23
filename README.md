@@ -29,7 +29,14 @@ açıp yazı yazar, iş bitince haber verir, izin isterken karar vermeni bardan 
 - Su içme hatırlatıcısı: "İçtim" düğmesi, günlük hedef ve seri.
 - Toplantı modu: takvimde (ICS) etkinlik varken bildirimler susar, bitince kaçırdıkların özetlenir.
 - Medya kontrolü, saat, takvim, pomodoro, kronometre, yapılacaklar, hava, döviz, dünya saatleri, pano geçmişi ve daha fazlası.
-- Yerel API (`127.0.0.1:47800`): her program bildirim gönderebilir. Ayrıntı: [API.md](API.md).
+- Yerel API (`127.0.0.1:47800`): her program bildirim gönderebilir; port ve anahtar `~/.dynbar-ecosystem/dynamic-bar.json` dosyasından otomatik bulunur. Ayrıntı: [API.md](API.md).
+
+**Spotlight ve kargo**
+- **Spotlight araması:** Spotlight for Windows'ta "Dynamic Bar ile entegre ol" açıkken kısayol (Alt+Space) aramayı adada açar. Spotlight çalışıyor olmalı; yoksa kendi çubuğu açılır. `dynbar search` ile de açılır.
+- **Dört mod:** yüzen, yüzen (yalnızca masaüstünde), üste yapışık, yapışık (yalnızca masaüstünde). Yapışık modda ekranın üstünde görev çubuğu gibi yer ayrılır (Ayarlar > Üstte pencerelere yer bırak).
+- **Kargo:** Bir dosyayı sürükleyip adanın üstüne getir; hedefi seç (Drive/OneDrive/Dropbox klasörü, kendi klasörlerin, Telegram, Discord, WhatsApp), maskot götürür. Hedefler Ayarlar > Gönder'de. Komut satırından: `dynbar send dosya --to drive`.
+  - Klasör hedefleri: Google Drive, OneDrive veya Dropbox masaüstü uygulaması kuruluysa içindeki `Dynamic Bar` alt klasörüne kopyalar.
+  - Telegram (50 MB) ve Discord webhook (25 MB) klasör kabul etmez. WhatsApp yarı otomatiktir: dosyayı panoya koyar, sohbeti açar, sen Ctrl+V yaparsın.
 
 ## Kurulum
 

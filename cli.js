@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Dynamic Bar komut satırı aracı. Ortam: DYNBAR_URL (varsayılan http://127.0.0.1:47800), DYNBAR_TOKEN (ayarlarda anahtar tanımlıysa)
 const { spawn } = require('child_process'), fs = require('fs'), os = require('os'), path = require('path');
-const BASE = process.env.DYNBAR_URL || 'http://127.0.0.1:47800', TOKEN = process.env.DYNBAR_TOKEN || '';
-const BOOL = new Set(['force', 'sticky', 'high', 'remove']);
+// Ortam değişkeni yoksa Dynamic Bar'ın bağlantı dosyasından (~/.dynbar-ecosystem/dynamic-bar.json) port ve anahtar okunur
+const LINK = (() => { try { const l = JSON.parse(require('fs').readFileSync(require('path').join(require('os').homedir(), '.dynbar-ecosystem', 'dynamic-bar.json'), 'utf8')); return l && l.app === 'dynamic-bar' ? l : {}; } catch { return {}; } })();
+const BASE = process.env.DYNBAR_URL || (LINK.port ? 'http://127.0.0.1:' + LINK.port : 'http://127.0.0.1:47800'), TOKEN = process.env.DYNBAR_TOKEN || LINK.token || '';
+const BOOL = new Set(['force', 'sticky', 'high', 'remove', 'list']);
 const argv = process.argv.slice(2), cmd = argv.shift(), pos = [], fl = {};
 for (let i = 0; i < argv.length; i++) {
   const x = argv[i];
@@ -16,6 +18,9 @@ const USAGE = `kullanım:
   dynbar remind <10s|5m|1h> "metin" ["başlık"]
   dynbar dnd on|off|toggle
   dynbar panel open|close|toggle
+  dynbar send <dosya|klasör ...> --to <hedef>   dosyaları kargoyla gönderir (API anahtarı gerekir)
+  <komut> | dynbar send - --to <hedef> [--name log.txt]   standart girdiyi dosya olarak gönderir
+  dynbar send --list                  hedefleri listeler
   dynbar search [open|close|toggle]   Spotlight aramasını adadan açar (Spotlight çalışıyor olmalı)
   dynbar dismiss [anahtar]
   dynbar todo add "metin" | done <sıra> | clear
@@ -23,11 +28,11 @@ const USAGE = `kullanım:
   dynbar setup-claude [--remove]      Claude Code hook'larını ~/.claude/settings.json dosyasına ekler (veya kaldırır)
   dynbar water                        su içme hatırlatıcısını hemen göster`;
 
-async function call(method, route, body) {
+async function call(method, route, body, timeout = 3000) {
   try {
     const r = await fetch(BASE + route, {
       method, headers: { 'Content-Type': 'application/json', ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) },
-      body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(3000)
+      body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout)
     });
     const t = await r.text();
     if (!r.ok) { console.error('hata ' + r.status + ': ' + t); return false; }
@@ -66,6 +71,22 @@ const dur = (s) => { const m = /^(\d+(?:\.\d+)?)(s|m|h)?$/.exec(s || ''); return
     case 'remind': {
       const s = dur(pos[0]); if (!(s > 0) || !pos[1]) { console.log(USAGE); process.exit(1); }
       return done(await post('/remind', { seconds: s, text: pos[1], title: pos[2] || 'Hatırlatıcı' }));
+    }
+    case 'send': {
+      if (fl.list) { const r = await call('GET', '/destinations'); if (r === false) process.exit(1); JSON.parse(r).forEach((d) => console.log(d.id + '	' + d.name)); process.exit(0); }
+      if (!pos.length || !fl.to) { console.log(USAGE); process.exit(1); }
+      let paths = pos.filter((p) => p !== '-').map((p) => path.resolve(p)), tmp = null;
+      if (pos.includes('-')) { // standart girdi: geçici dosyaya yazılır, teslimattan sonra silinir
+        const chunks = []; for await (const c of process.stdin) chunks.push(c);
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dynbar-')); tmp = dir;
+        const name = path.basename(fl.name || 'cikti-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.txt');
+        fs.writeFileSync(path.join(dir, name), Buffer.concat(chunks)); paths.push(path.join(dir, name));
+      }
+      const r = await call('POST', '/send', { paths, to: fl.to, wait: true }, 600000);
+      if (tmp) try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {}
+      if (r === false) process.exit(1);
+      try { const j = JSON.parse(r); if (j.ok === false) { console.error('hata: ' + j.error); process.exit(1); } console.log(j.dest + ': ' + j.files + ' dosya teslim edildi' + (j.text ? ' (' + j.text + ')' : '')); } catch { console.log(r); }
+      process.exit(0);
     }
     case 'dnd': return done(await post('/dnd', pos[0] === 'on' ? { on: true } : pos[0] === 'off' ? { on: false } : {}));
     case 'panel': return done(await post('/panel', { mode: pos[0] || 'toggle' }));
