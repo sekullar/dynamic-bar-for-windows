@@ -16,6 +16,7 @@ const USAGE = `kullanım:
   dynbar remind <10s|5m|1h> "metin" ["başlık"]
   dynbar dnd on|off|toggle
   dynbar panel open|close|toggle
+  dynbar search [open|close|toggle]   Spotlight aramasını adadan açar (Spotlight çalışıyor olmalı)
   dynbar dismiss [anahtar]
   dynbar todo add "metin" | done <sıra> | clear
   dynbar status
@@ -68,6 +69,7 @@ const dur = (s) => { const m = /^(\d+(?:\.\d+)?)(s|m|h)?$/.exec(s || ''); return
     }
     case 'dnd': return done(await post('/dnd', pos[0] === 'on' ? { on: true } : pos[0] === 'off' ? { on: false } : {}));
     case 'panel': return done(await post('/panel', { mode: pos[0] || 'toggle' }));
+    case 'search': return done(await post('/search', { mode: pos[0] || 'toggle' }));
     case 'dismiss': return done(await post('/dismiss', pos[0] ? { key: pos[0] } : {}));
     case 'todo': {
       if (pos[0] === 'add' && pos[1]) return done(await post('/todo', { add: pos.slice(1).join(' ') }));

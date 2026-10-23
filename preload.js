@@ -1,5 +1,6 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('dynbar', {
+  getPath: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } }, // bırakılan dosyanın yolu (Electron 32+ File.path vermez)
   onActivity: (cb) => ipcRenderer.on('activity', (_e, a) => cb(a)),
   onSettings: (cb) => ipcRenderer.on('settings', (_e, s) => cb(s)),
   getSettings: () => ipcRenderer.invoke('settings:get'),

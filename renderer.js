@@ -27,7 +27,7 @@
     r.setProperty('--bg', BG[s.bg] || BG.black); r.setProperty('--bga', s.bgAlpha || 100);
     const sh = SHADOW[s.shadow] || SHADOW.soft; r.setProperty('--sh1', sh[0]); r.setProperty('--sh2', sh[1]);
     r.setProperty('--ui', s.uiScale || 1); r.setProperty('--top', (s.offsetY ?? 10) + 'px');
-    document.body.dataset.mode = s.mode; document.body.dataset.anim = s.anim || 'spring';
+    document.body.dataset.mode = /^dock/.test(s.mode) ? 'dock' : 'float'; document.body.dataset.anim = s.anim || 'spring';
     swipe = s.swipe || 160; toasts = s.mediaToasts !== false; setTimeout(syncShape, 0);
     document.querySelectorAll('[data-feat]').forEach((sec) => (sec.style.display = s[sec.dataset.feat] === false ? 'none' : '')); layout();
     document.querySelectorAll('.sw').forEach((b) => b.classList.toggle('on', !s.accent && b.dataset.c === s.color));
@@ -69,6 +69,9 @@
     text.textContent = a.app ? (a.text ? a.app + ' · ' + a.text : a.app) : (a.text || '');
     bar.style.display = (a.type === 'timer' || a.progress != null) ? 'block' : 'none';
     fill.style.width = ((a.progress || 0) * 100) + '%'; fill.style.background = a.color || '';
+    island.classList.toggle('parcel', !!a.parcel); island.classList.toggle('delivered', !!(a.parcel && a.parcel.done)); // kargo: paket yolda, hedef simgesi uçta
+    const rd = $('#rdest'); rd.textContent = a.parcel ? a.parcel.icon || '📁' : '';
+    if (a.parcel && a.parcel.done) { rd.classList.remove('pop'); void rd.offsetWidth; rd.classList.add('pop'); }
     const acts = $('#acts'); acts.innerHTML = ''; island.classList.toggle('ask', !!a.actions);
     (a.actions || []).forEach((x) => {
       const b = document.createElement('button'); b.textContent = x.label; b.dataset.a = x.id;
@@ -141,12 +144,29 @@
   }
   new MutationObserver(syncShape).observe(island, { attributes: true, attributeFilter: ['class'] });
   setInterval(() => { shapeArea = 0; syncShape(); }, 5000); // güvenlik: bölge zamanla bozulursa yeniden bildir
-  function enter() { // giriş animasyonu: yukarıdan yay gibi iner
-    if (cfg.anim === 'off' || !island.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    island.animate([{ transform: 'translateX(-50%) translateY(-70px) scale(.7)', opacity: 0 }, { transform: 'translateX(-50%) translateY(0) scale(1)', opacity: 1 }],
-      { duration: 800, easing: getComputedStyle(document.documentElement).getPropertyValue('--spring').trim() || 'ease-out' });
+  // Giriş / çıkış animasyonu. Yüzen: yukarıdan yay gibi iner. Yapışık: üst kenardan ayrılmaz; dar ve kısa bir çentik olarak
+  // kenardan büyür (yaysız, kenara sabit), çıkarken aynı hareketle kenara geri çekilir.
+  let enterAnim = null;
+  const motionOk = () => cfg.anim !== 'off' && island.animate && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isDock = () => document.body.dataset.mode === 'dock';
+  const NOTCH = { transform: 'translateX(-50%) scale(.5,.12)', opacity: 0, transformOrigin: '50% 0' };
+  const FULL = { transform: 'translateX(-50%) scale(1,1)', opacity: 1, transformOrigin: '50% 0' };
+  function enter() {
+    if (enterAnim) { enterAnim.cancel(); enterAnim = null; }
+    if (!motionOk()) return;
+    enterAnim = isDock()
+      ? island.animate([NOTCH, { ...NOTCH, opacity: 1, offset: 0.18 }, FULL], { duration: 480, easing: 'cubic-bezier(.2,.85,.25,1)' })
+      : island.animate([{ transform: 'translateX(-50%) translateY(-70px) scale(.7)', opacity: 0 }, { transform: 'translateX(-50%) translateY(0) scale(1)', opacity: 1 }],
+        { duration: 800, easing: getComputedStyle(document.documentElement).getPropertyValue('--spring').trim() || 'ease-out' });
+  }
+  function leave() { // yalnızca yapışık modda: ana süreç pencereyi bu animasyon bittikten sonra gizler
+    if (!motionOk() || !isDock()) return;
+    if (enterAnim) enterAnim.cancel();
+    enterAnim = island.animate([FULL, NOTCH], { duration: 240, easing: 'cubic-bezier(.5,0,.75,.4)', fill: 'forwards' });
   }
   dynbar.on('entrance', enter);
+  dynbar.on('exit', leave);
+  dynbar.on('hush', (v) => island.classList.toggle('hush', !!v)); // Spotlight arama hapı açıkken ada çekilir
   function layout() { // açık sayfaları (ayarlardan kapatılmayanları) listele, noktaları yeniden çiz
     pages = [...document.querySelectorAll('#track section')].filter((s) => s.style.display !== 'none');
     $('.pdots').innerHTML = pages.map(() => '<i></i>').join(''); dots = [...document.querySelectorAll('.pdots i')];
@@ -195,7 +215,7 @@
 
   // olaylar
   dynbar.onActivity((a) => {
-    if (a.key && busy && cur && cur.key === a.key) { cur = a; paintNotif(a); schedule(a); return; } // aynı anahtar: yerinde güncelle (ilerleme, ses/parlaklık göstergesi)
+    if (a.key && busy && cur && cur.key === a.key) { cur = a; paintNotif(a); if (a.parcel) setMood(a.mood || 'courier'); schedule(a); return; } // aynı anahtar: yerinde güncelle (ilerleme, ses/parlaklık göstergesi)
     push(a);
   });
   dynbar.on('missed', (list) => (list || []).forEach(addHist));

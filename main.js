@@ -1,7 +1,10 @@
-const { app, BrowserWindow, Tray, Menu, screen, globalShortcut, ipcMain, nativeImage, powerMonitor, clipboard, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, screen, globalShortcut, ipcMain, nativeImage, powerMonitor, clipboard, shell, safeStorage } = require('electron');
 const http = require('http'), path = require('path'), fs = require('fs'), { spawn } = require('child_process');
 const extras = require('./extras');
 const vdesk = require('./vdesk');
+const spotlight = require('./spotlight');
+const appbar = require('./appbar');
+const parcel = require('./parcel');
 
 // Windows, pencere başka bir sanal masaüstündeyken (veya 4 parmakla masaüstü/çalışma alanı geçişinde) Chromium'a pencerenin
 // "örtülü" olduğunu bildirir; Chromium da çizimi ve fare girdisini durdurur, geri dönünce arayüz tepkisiz kalır. Bu takibi kapat.
@@ -18,8 +21,9 @@ const DEFAULTS = {
   color: 'pink', accent: '', character: 'cat', accessory: 'none', eyes: true, pet: true,
   // görünüm
   uiScale: 1, offsetY: 10, bg: 'black', bgAlpha: 100, shadow: 'soft', anim: 'spring',
-  // konum ve davranış (mode: float | desktop | dock)
-  mode: 'float', display: 0, hideFullscreen: true, autostart: false,
+  // konum ve davranış (mode: float | dock | desktop (yüzen, sadece masaüstünde) | dock-desktop (yapışık, sadece masaüstünde))
+  // reserveSpace: bar her zaman görünürken ekranın üstünde pencerelere yer bırakmaz (görev çubuğu gibi); sadece masaüstü modlarında uygulanmaz
+  mode: 'float', reserveSpace: true, display: 0, hideFullscreen: true, autostart: false,
   openOn: 'click', closeDelay: 3.5, sleepAfter: 20, ttlScale: 1, startupToast: true, swipe: 160,
   panelKey: 'Control+Alt+B', testKey: 'Control+Alt+N',
   // sayfalar
@@ -33,9 +37,11 @@ const DEFAULTS = {
   pomoFocus: 25, pomoBreak: 5, pomoLong: 15, pomoRounds: 4,
   // bildirimler ve ekosistem
   batteryToasts: true, dnd: false, quietOn: false, quietFrom: '23:00', quietTo: '07:00', waterEvery: 0, eyeBreak: false,
-  mediaToasts: true, artOnline: true, osd: true, api: true, apiToken: '', mutedApps: '', focusDnd: true, sound: 'off',
+  mediaToasts: true, artOnline: true, osd: true, api: true, apiToken: '', mutedApps: '', focusDnd: true, sound: 'off', spotlightSearch: true,
   // Claude Code: canlı durum (laptop maskotu), bardan onay, yapay zekâ özeti
   claudeLive: true, claudeAsk: true, claudeAi: true, pageClaude: true,
+  // kargo: dosyayı adaya sürükleyip bırak, maskot götürsün. Gizli değerler (parcelTgToken, parcelDiscord) şifreli saklanır (aşağıda SECRET)
+  parcel: true, parcelAutoFolders: true, parcelFolders: '', parcelTgToken: '', parcelTgChat: '', parcelDiscord: '', parcelWaPhone: '',
   // maskotun günlük yaşamı, su hedefi, toplantı modu
   lifeMascot: true, waterGoal: 8, meetingMode: true,
   todos: []
@@ -48,7 +54,7 @@ const pickKnown = (p) => { const o = {}; if (p && typeof p === 'object') for (co
 if (!app.requestSingleInstanceLock()) app.quit();
 let win, settingsWin, tray, demoIndex = 0;
 const alive = (w) => w && !w.isDestroyed();
-let onDesktop = true, fullscreen = false, raised = false, watcher, mediaProc, media = { none: true }, focus = false, missed = [];
+let onDesktop = true, fullscreen = false, raised = false, watcher, mediaProc, media = { none: true }, focus = false, missed = [], held = [];
 const settingsFocused = () => alive(settingsWin) && settingsWin.isFocused();
 
 // --- tıklama bölgesi: pencere şeffaf ve büyük; yalnızca adanın üstündeyken fareyi yakalar, diğer yerde arkadaki uygulamalara geçirir.
@@ -124,18 +130,34 @@ function onWorkspaceSwitch(guid) {
   burst();
   try { win.webContents.send('workspace-switched'); } catch {}
 }
-function recover() { setTimeout(() => { extras.place(); updateVisibility(); burst(); }, 800); }
+function recover() { setTimeout(() => { extras.place(); updateVisibility(); burst(); reserve(); }, 800); }
+
+const isDock = () => /^dock/.test(settings.mode), desktopOnly = () => /desktop$/.test(settings.mode);
+// Bar her zaman görünürken ekranın üstünde yer ayırır; adanın kapladığı yükseklik kadar (ölçekle birlikte)
+function reserve() {
+  const ui = Math.max(0.8, Math.min(1.3, +settings.uiScale || 1)), h = isDock() ? 36 : (settings.offsetY ?? 10) + 42;
+  if (appbar.update(settings.reserveSpace !== false && !desktopOnly(), settings.display, h * ui)) {
+    // Windows ada penceresini ayrılan şeridin altına iter; ada ekranın en üstüne (şeridin içine) geri konur
+    [120, 400, 1000].forEach((t) => setTimeout(extras.place, t));
+  }
+}
 
 // "Sadece masaüstünde": masaüstü öndeyse, bildirim varsa veya ayarlar açıksa görünür; aksi halde gizlenir
+let hideT = 0; // yapışık modda çıkış animasyonu bitince pencereyi gizleyen zamanlayıcı
 function updateVisibility() {
   if (!alive(win)) return;
-  const show = !(settings.hideFullscreen && fullscreen) && (settings.mode !== 'desktop' || onDesktop || raised || settingsFocused());
+  const show = !(settings.hideFullscreen && fullscreen) && (!desktopOnly() || onDesktop || raised || settingsFocused());
   if (show) {
+    const leaving = !!hideT; // çıkış animasyonu sürerken geri dönüldüyse giriş animasyonu yeniden oynar
+    if (leaving) { clearTimeout(hideT); hideT = 0; }
     const was = win.isVisible();
     win.showInactive();
     try { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
     win.setAlwaysOnTop(true, 'screen-saver');
-    if (!was) { ignoring = null; win.webContents.send('entrance'); }
+    if (!was || leaving) { ignoring = null; win.webContents.send('entrance'); }
+  } else if (isDock() && settings.anim !== 'off' && win.isVisible()) {
+    // yapışık modda ada üst kenara geri çekilir, sonra pencere gizlenir
+    if (!hideT) { win.webContents.send('exit'); hideT = setTimeout(() => { hideT = 0; if (alive(win)) win.hide(); }, 260); }
   } else win.hide();
 }
 const mins = (t) => { const [h, m] = String(t || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
@@ -153,8 +175,22 @@ const send = (a) => {
     if (a.title && !a.key) { missed.push({ title: a.title, text: a.text || '', app: a.app || '', t: Date.now() }); if (missed.length > 20) missed.shift(); }
     return;
   }
+  if (overlayOpen()) { // arama hapı veya kargo bölgesi adanın üstünde: bildirimler o bitince gösterilir, yüksek öncelikli olan kapatır
+    if (a.priority !== 'high') {
+      if (a.key) held = held.filter((x) => x.key !== a.key);
+      held.push(a); if (held.length > 20) held.shift();
+      return;
+    }
+    spotlight.close(); parcel.close();
+  }
   raised = true; updateVisibility(); win.webContents.send('activity', a);
 };
+const overlayOpen = () => spotlight.isOpen() || parcel.isOpen();
+function overlayChanged() { // arama hapı / kargo bölgesi açılırken ada gizlenir, kapanınca geri gelir ve tutulan bildirimler gösterilir
+  const open = overlayOpen();
+  if (alive(win)) win.webContents.send('hush', open);
+  if (!open) held.splice(0).forEach(send);
+}
 function flushMissed() {
   const list = missed; missed = [];
   if (!list.length || !alive(win)) return;
@@ -164,11 +200,29 @@ function flushMissed() {
 const file = () => path.join(app.getPath('userData'), 'settings.json');
 const load = () => { try { settings = { ...DEFAULTS, ...pickKnown(JSON.parse(fs.readFileSync(file(), 'utf8'))) }; } catch {} };
 const save = () => { try { fs.writeFileSync(file(), JSON.stringify(settings)); } catch {} };
-const broadcast = () => [win, settingsWin].forEach((w) => alive(w) && w.webContents.send('settings', settings));
+// Gizli değerler (bot anahtarı, webhook) diskte Windows DPAPI ile şifreli ("enc:...") durur; arayüze yalnızca "••••" gider.
+const SECRET = ['parcelTgToken', 'parcelDiscord'], MASK = '••••';
+function getSecret(k) {
+  const v = settings[k];
+  if (typeof v !== 'string') return '';
+  try { return v.startsWith('enc:') ? safeStorage.decryptString(Buffer.from(v.slice(4), 'base64')) : v.startsWith('raw:') ? v.slice(4) : ''; } catch { return ''; }
+}
+const masked = () => { const o = { ...settings }; for (const k of SECRET) if (o[k]) o[k] = MASK; return o; };
+function sealSecrets(p) { // düz metin gelen gizli değerleri şifrele; "••••" gelen değişmedi demektir
+  if (!p || typeof p !== 'object') return p;
+  const o = { ...p };
+  for (const k of SECRET) {
+    if (typeof o[k] !== 'string') continue;
+    if (o[k] === MASK || o[k].startsWith('enc:') || o[k].startsWith('raw:')) { delete o[k]; continue; }
+    o[k] = !o[k] ? '' : safeStorage.isEncryptionAvailable() ? 'enc:' + safeStorage.encryptString(o[k]).toString('base64') : 'raw:' + o[k];
+  }
+  return o;
+}
+const broadcast = () => [win, settingsWin].forEach((w) => alive(w) && w.webContents.send('settings', masked()));
 function applyPatch(p, reset) {
   const wasDnd = settings.dnd;
-  settings = reset ? { ...DEFAULTS, todos: settings.todos } : { ...settings, ...pickKnown(p) };
-  save(); updateVisibility(); broadcast(); extras.apply(); regKeys();
+  settings = reset ? { ...DEFAULTS, todos: settings.todos } : { ...settings, ...pickKnown(sealSecrets(p)) };
+  save(); updateVisibility(); broadcast(); extras.apply(); regKeys(); reserve();
   if (wasDnd && !settings.dnd) flushMissed();
 }
 
@@ -192,6 +246,9 @@ function createWindow(quiet) {
   setIgn(); applyShape(true);
   updateVisibility();
   win.loadFile('index.html');
+  // arayüzdeki hatalar günlüğe düşsün (panel boş kalırsa sebebi görülebilsin)
+  win.webContents.on('console-message', (_e, level, msg, line, src) => { if (level >= 3) LOG('arayüz hatası:', msg, String(src).split('/').pop() + ':' + line); });
+  win.webContents.on('render-process-gone', (_e, d) => LOG('arayüz süreci kapandı:', d.reason));
   sendHwnd();
   win.webContents.once('did-finish-load', () => { broadcast(); if (!quiet && settings.startupToast !== false) send(demos[0]); });
 }
@@ -297,6 +354,18 @@ ipcMain.on('ask-answer', (_e, d) => {
   const x = d && asks.get(d.id); if (x) x.finish(d.answer === 'allow' || d.answer === 'deny' ? d.answer : 'dismissed');
 });
 
+// Spotlight araması: POST /search {mode: "toggle"|"open"|"close"}. Spotlight kısayola basılınca çağırır. Spotlight yoksa 503 döner
+// ve Spotlight kendi çubuğunu açar.
+function handleSearch(req, reply) {
+  let body = '';
+  req.on('data', (d) => { if (body.length < 1024) body += d; });
+  req.on('end', async () => {
+    let o = {}; try { o = JSON.parse(body || '{}'); } catch {}
+    const ok = await spotlight.open(o.mode === 'open' || o.mode === 'close' ? o.mode : 'toggle');
+    reply(ok ? 200 : 503, ok ? 'ok' : 'spotlight yok');
+  });
+}
+
 // Hata günlüğü: userData/log.txt (en çok ~200 KB; aşınca yarıya kırpılır). Tray menüsünden açılır.
 function LOG(...a) {
   try {
@@ -362,6 +431,7 @@ function startServer() {
     if (!authed(req, u)) return reply(401, 'unauthorized');
     if (req.method === 'GET' && u.pathname === '/status') return reply(200, handleApi('status'));
     if (req.method === 'POST' && u.pathname === '/ask') return handleAsk(req, res);
+    if (req.method === 'POST' && u.pathname === '/search') return handleSearch(req, reply);
     const cmd = u.pathname.slice(1);
     if (req.method !== 'POST' || !POST_CMDS.includes(cmd)) return reply(404, 'not found');
     let body = '', size = 0;
@@ -470,7 +540,7 @@ function regKeys() {
 
 ipcMain.handle('media:get', () => media);
 ipcMain.on('media:cmd', (_e, c) => ['playpause', 'next', 'prev'].includes(c) && mediaProc && mediaProc.stdin.write(c + '\n'));
-ipcMain.handle('settings:get', () => settings);
+ipcMain.handle('settings:get', () => masked());
 ipcMain.on('settings:set', (_e, p) => applyPatch(p));
 ipcMain.on('settings:reset', () => applyPatch(null, true));
 ipcMain.on('open-settings', openSettings);
@@ -487,12 +557,13 @@ ipcMain.on('interactive', (_e, v) => {
     win.moveTop();
   }
 });
-ipcMain.on('dom-click', () => { lastDomClick = Date.now(); });
-ipcMain.on('raise', (_e, v) => { raised = v; updateVisibility(); });
+ipcMain.on('dom-click', () => { lastDomClick = Date.now(); });ipcMain.on('raise', (_e, v) => { raised = v; updateVisibility(); });
 ipcMain.on('test', demo);
 
 app.whenReady().then(() => {
   load(); createWindow(); createTray(); startServer(); startWatchers();
+  spotlight.init({ win: () => win, settings: masked, preload, onState: overlayChanged });
+  parcel.init({ win: () => win, settings: () => settings, secret: getSecret, preload, send, onState: overlayChanged, busy: () => spotlight.isOpen() });
   if (process.platform === 'win32') { // koffi yoksa sanal masaüstü taşıma ve yedek tıklama çalışmaz: sessizce bozulmasın, kullanıcıya söyle
     try { require('koffi'); } catch (e) {
       LOG('koffi yüklü değil, "npm install" çalıştır:', e.message);
@@ -500,10 +571,10 @@ app.whenReady().then(() => {
     }
   }
   extras.init({ settings: () => settings, win: () => win, send, ps, lines, ws: wsMessage, allowReq, meeting: setMeeting });
-  regKeys();
+  regKeys(); reserve();
   setInterval(hitTest, 30); setInterval(reassert, 4000);
   ['display-added', 'display-removed', 'display-metrics-changed'].forEach((e) => screen.on(e, recover));
   ['resume', 'unlock-screen'].forEach((e) => powerMonitor.on(e, recover));
 });
-app.on('will-quit', () => { quitting = true; globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); });
+app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); });
 app.on('window-all-closed', (e) => e.preventDefault()); // ayar penceresi kapanınca uygulama kapanmasın

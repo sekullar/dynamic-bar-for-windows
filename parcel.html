@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<style>
+  :root { --spring: linear(0.0, 0.0122, 0.0453, 0.095, 0.1569, 0.2275, 0.3034, 0.3819, 0.4608, 0.538, 0.6122, 0.682, 0.7466, 0.8055, 0.8583, 0.9048, 0.9452, 0.9795, 1.0081, 1.0313, 1.0496, 1.0634, 1.0732, 1.0795, 1.0828, 1.0835, 1.0821, 1.0791, 1.0748, 1.0694, 1.0634, 1.0571, 1.0505, 1.0439, 1.0375, 1.0313, 1.0256, 1.0203, 1.0154, 1.0111, 1); --spring-soft: linear(0.0, 0.0077, 0.0287, 0.0604, 0.1004, 0.1464, 0.1968, 0.2501, 0.3048, 0.36, 0.4146, 0.4681, 0.5198, 0.5693, 0.6162, 0.6603, 0.7015, 0.7396, 0.7747, 0.8068, 0.836, 0.8623, 0.8859, 0.9069, 0.9255, 0.9418, 0.956, 0.9683, 0.9789, 0.9878, 0.9953, 1.0016, 1.0066, 1.0107, 1.0138, 1.0162, 1.0179, 1.019, 1.0197, 1.0199, 1);
+    --bg:#000; --bga:100; --acc:#ffc2d9; --top:10px; --ui:1; --sh:0 6px 24px rgba(0,0,0,.45); --fg2:rgba(255,255,255,.52); --w:440px; }
+  html,body { margin:0; height:100%; background:transparent; overflow:hidden; font-family:"Segoe UI Variable","Segoe UI",system-ui,sans-serif; color:#fff; user-select:none; }
+  #stage { position:absolute; left:50%; top:0; width:0; height:0; transform:scale(var(--ui)); transform-origin:0 0; }
+  /* arama hapıyla aynı: ada konumu ve boyutundan başlar, yay gibi açılır */
+  #pill { position:absolute; top:var(--top); left:0; transform:translateX(-50%); width:112px; height:36px; border-radius:18px; overflow:hidden;
+    background:color-mix(in srgb, var(--bg) calc(max(var(--bga), 92) * 1%), transparent); box-shadow:var(--sh);
+    transition: width .8s var(--spring), height .6s var(--spring-soft), border-radius .6s var(--spring-soft), box-shadow .25s; }
+  #pill.open { width:var(--w); border-radius:28px; }
+  #pill.pick { --w:520px; }
+  #pill.hot { box-shadow: var(--sh), 0 0 0 2px var(--acc), 0 0 26px color-mix(in srgb, var(--acc) 55%, transparent); }
+  body[data-mode=dock] #pill { top:0; border-radius:0 0 18px 18px; }
+  body[data-mode=dock] #pill.open { border-radius:0 0 28px 28px; }
+  #pill.settled { transition: width .5s var(--spring-soft), height .24s cubic-bezier(.22,.9,.3,1), border-radius .6s var(--spring-soft), box-shadow .25s; }
+  #pill.closing { width:112px !important; height:36px !important; border-radius:18px; transition: width .3s cubic-bezier(.4,0,.2,1), height .3s cubic-bezier(.4,0,.2,1), border-radius .3s; }
+  body[data-mode=dock] #pill.closing { border-radius:0 0 18px 18px; }
+  #inner { position:absolute; left:50%; top:0; width:var(--w); margin-left:calc(var(--w) / -2); opacity:0; filter:blur(6px); transition: opacity .15s, filter .15s; }
+  #pill.pick #inner { margin-left:-260px; }
+  #pill.open #inner { opacity:1; filter:none; transition: opacity .3s .2s, filter .4s .2s; }
+  #pill.closing #inner { opacity:0; filter:none; transition: opacity .1s; }
+
+  /* bırakma bölgesi */
+  #zone { height:76px; display:flex; align-items:center; justify-content:center; gap:14px; }
+  #zone .box { font-size:30px; line-height:1; animation: bobbox 1.3s ease-in-out infinite; }
+  #zone b { display:block; font-size:15px; font-weight:650; }
+  #zone span { display:block; font-size:12px; color:var(--fg2); margin-top:2px; }
+  #pill.hot #zone .box { animation: hopbox .5s var(--spring) infinite alternate; }
+  @keyframes bobbox { 50% { transform:translateY(-4px) rotate(-6deg); } }
+  @keyframes hopbox { to { transform:translateY(-7px) scale(1.15) rotate(8deg); } }
+  #zone[hidden], #pickv[hidden] { display:none; }
+
+  /* hedef seçimi */
+  #pickv { padding:14px 18px 14px; }
+  #card { display:flex; align-items:center; gap:12px; padding-bottom:12px; border-bottom:.5px solid rgba(255,255,255,.1); }
+  #card img { width:36px; height:36px; object-fit:contain; flex:none; }
+  #card .t { min-width:0; flex:1; }
+  #card .n { font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #card .m { font-size:12px; color:var(--fg2); margin-top:2px; }
+  #ask { font-size:12px; color:var(--fg2); margin:12px 2px 8px; }
+  #dests { display:flex; flex-wrap:wrap; gap:8px; }
+  .dest { display:flex; align-items:center; gap:8px; padding:9px 13px; border-radius:14px; background:rgba(255,255,255,.08); font-size:13.5px; cursor:pointer; transition: background .14s, transform .2s var(--spring); }
+  .dest .ic { font-size:17px; line-height:1; }
+  .dest kbd { font:inherit; font-size:10.5px; padding:0 5px; border-radius:4px; background:rgba(255,255,255,.14); color:var(--fg2); }
+  .dest.sel { background:color-mix(in srgb, var(--acc) 34%, transparent); transform:translateY(-1px); }
+  .dest:active { transform:scale(.96); }
+  #none { font-size:12.5px; color:var(--fg2); line-height:1.5; }
+  #hint { display:flex; gap:16px; justify-content:center; margin-top:12px; font-size:11.5px; color:var(--fg2); }
+  #hint kbd { font:inherit; font-size:11px; padding:1px 6px; margin-right:5px; border-radius:5px; background:rgba(255,255,255,.12); }
+  .enter { animation: rowin .26s cubic-bezier(.22,.9,.3,1) both; }
+  @keyframes rowin { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) { #pill, #inner, .dest { transition-duration:.01s; } #zone .box { animation:none; } }
+</style></head>
+<body>
+<div id="stage"><div id="pill"><div id="inner">
+  <div id="zone"><span class="box">📦</span><div><b id="ztitle">Dosyayı buraya bırak</b><span id="zsub">Maskot götürsün</span></div></div>
+  <div id="pickv" hidden>
+    <div id="card"><img id="cicon" alt=""><div class="t"><div class="n" id="cname"></div><div class="m" id="cmeta"></div></div></div>
+    <div id="ask">Nereye götüreyim?</div>
+    <div id="dests"></div>
+    <div id="hint"><span><kbd>↵</kbd>Götür</span><span><kbd>1-9</kbd>Seç</span><span><kbd>Esc</kbd>Vazgeç</span></div>
+  </div>
+</div></div></div>
+<script src="palette.js"></script>
+<script src="parcel-ui.js"></script>
+</body></html>
