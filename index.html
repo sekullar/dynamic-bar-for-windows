@@ -215,8 +215,22 @@
   #mprog { flex:1; height:3px; border-radius:2px; background:#ffffff22; margin-left:4px; }
   #mprog b { display:block; height:100%; width:0; border-radius:2px; background:var(--body); transition:width .9s linear; }
   #mtime { font-size:11px; color:#ffffffa0; min-width:34px; text-align:right; }
-  #mascot[data-mood=music] .body-g { animation:sway 1.4s ease-in-out infinite; }
-  @keyframes sway { 0%,100% { transform:rotate(-5deg); } 50% { transform:rotate(5deg); } }
+  /* müzik: kulaklık takar, gözlerini kapatıp ritme göre sallanır, nota çıkar */
+  .hp { opacity:0; }
+  .hp .band { fill:none; stroke:#2a1a24; stroke-width:2.2; stroke-linecap:round; }
+  .hp .cup { fill:#2a1a24; transform-box:fill-box; transform-origin:center; } .hp .cup-hl { fill:#ffffff40; }
+  .note { opacity:0; font:700 7px sans-serif; fill:#ffffffd0; }
+  #mascot[data-mood=music] .hp { opacity:1; animation:hpdrop .55s var(--ease) both; }
+  #mascot[data-mood=music] #acc { opacity:0; }
+  #mascot[data-mood=music] .eye { animation:none; transform:scaleY(.2); transition:transform .25s .3s; }
+  #mascot[data-mood=music] .body-g { animation:groove .62s ease-in-out .5s infinite alternate; }
+  #mascot[data-mood=music] .cup { animation:cupbeat .62s ease-in-out .5s infinite alternate; }
+  #mascot[data-mood=music] .note { animation:noteup 1.7s ease-out .5s infinite; }
+  #mascot[data-mood=music] .note.n2 { animation-delay:1.35s; }
+  @keyframes hpdrop { 0% { transform:translateY(-10px); opacity:0; } 60% { transform:translateY(1.2px); opacity:1; } 100% { transform:none; opacity:1; } }
+  @keyframes groove { from { transform:rotate(-6deg) translateY(0); } to { transform:rotate(6deg) translateY(-1.2px); } }
+  @keyframes cupbeat { to { transform:scale(1.14); } }
+  @keyframes noteup { 0% { opacity:0; transform:translate(0,2px) scale(.8); } 20% { opacity:1; } 100% { opacity:0; transform:translate(4px,-13px) scale(1.1); } }
   @keyframes eq { 0%,100% { transform:scaleY(.25); } 50% { transform:scaleY(1); } }
   /* ek sayfalar */
   .ptime { display:none; margin-left:auto; font-size:11.5px; font-variant-numeric:tabular-nums; color:#ffffffcc; transition:opacity .25s; }
@@ -265,6 +279,7 @@
       <circle class="cheek" cx="10" cy="27" r="2.6"/><circle class="cheek" cx="30" cy="27" r="2.6"/>
       <path class="brow" d="M11.8 18.6L17.4 20.2"/><path class="brow" d="M22.6 20.2L28.2 18.6"/><path class="focusm" d="M18.8 28h4.4"/>
       <path class="mouth" d="M17.5 27 Q20 29.5 22.5 27"/><path class="sadm" d="M17.5 29 Q20 26.2 22.5 29"/><ellipse class="yawnm" cx="20" cy="28.2" rx="2.4" ry="3"/><path class="drool" d="M23.6 29.4q1.1 2.2 0 3.2q-1.1-1 0-3.2z"/><g id="acc"></g>
+      <g class="hp"><path class="band" d="M6 22Q6 7 20 7Q34 7 34 22"/><rect class="cup" x="3.5" y="19" width="5" height="8" rx="2"/><rect class="cup-hl" x="4.6" y="20.4" width="1.2" height="5" rx=".6"/><rect class="cup" x="31.5" y="19" width="5" height="8" rx="2"/><rect class="cup-hl" x="32.6" y="20.4" width="1.2" height="5" rx=".6"/></g>
     </g>
     <g class="courier">
       <path class="cap" d="M8.5 15.5Q10 5.5 20 5Q30 5.5 31.5 15.5Q20 12.5 8.5 15.5Z"/><path class="capv" d="M26 13.5Q33 12.5 36 15.5Q31 16.5 25 15.5Z"/>
@@ -292,6 +307,7 @@
     </g>
     <g class="spark"><path d="M6 8l1.2 2.8L10 12 7.2 13.2 6 16 4.8 13.2 2 12l2.8-1.2z"/><path d="M33 3l1 2.2L36.2 6 34 7l-1 2.2L32 7l-2.2-1L32 5.2z"/><path d="M34 28l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8z"/></g>
     <text class="zzz" x="30" y="9">z</text>
+    <text class="note n1" x="31" y="9">♪</text><text class="note n2" x="3" y="11">♫</text>
   </svg>
   <div class="dots"><i></i><i></i><i></i></div>
   <div class="eq"><i></i><i></i><i></i><i></i></div><span class="ptime"></span>
