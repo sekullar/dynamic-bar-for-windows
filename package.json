@@ -1,6 +1,6 @@
 {
   "name": "dynamic-bar",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Dynamic Island style bar with a tiny mascot: notifications, media, Claude Code live status",
   "main": "main.js",
   "bin": {
