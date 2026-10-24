@@ -227,6 +227,20 @@
   #mascot[data-mood=music] .cup { animation:cupbeat .62s ease-in-out .5s infinite alternate; }
   #mascot[data-mood=music] .note { animation:noteup 1.7s ease-out .5s infinite; }
   #mascot[data-mood=music] .note.n2 { animation-delay:1.35s; }
+  /* telefon: Phoneix'ten bildirim gelince maskot cebinden telefonu çıkarıp ekrana bakar */
+  .phn { opacity:0; transform-box:fill-box; transform-origin:50% 100%; }
+  .phn .pbody { fill:#2a1a24; } .phn .pscr { fill:#bfe3ff; } .phn .pline { stroke:#2f8cff; stroke-width:1.1; stroke-linecap:round; fill:none; }
+  .phn .pdot { fill:#ff5d6c; } .phn .pglow { fill:url(#glowg); opacity:.0; }
+  #mascot[data-mood=phone] .phn { opacity:1; animation:phnup .5s var(--ease) both, phnbuzz .09s linear .55s 6 alternate; }
+  #mascot[data-mood=phone] .phn .pglow { opacity:.9; animation:pulse 1.6s ease-in-out .6s infinite; }
+  #mascot[data-mood=phone] .body-g { animation:phlean 3.4s var(--soft) both; }
+  #mascot[data-mood=phone] .eye { animation:phlook 3.4s var(--soft) both; }
+  #mascot[data-mood=phone] .brow { opacity:0; }
+  #mascot[data-mood=phone] .cheek { opacity:.9; }
+  @keyframes phnup { from { transform:translateY(12px) rotate(8deg); opacity:0; } to { transform:none; opacity:1; } }
+  @keyframes phnbuzz { from { translate:-.45px 0; } to { translate:.45px 0; } }
+  @keyframes phlean { 0% { transform:none; } 18% { transform:translateY(-2px) scale(1.04); } 38%,86% { transform:rotate(5deg) translate(1px,1.2px); } 100% { transform:none; } }
+  @keyframes phlook { 0%,14% { transform:scaleY(1); } 24%,80% { transform:translate(1.2px,1.6px) scaleY(.92); } 90%,100% { transform:translate(0,0) scaleY(1); } }
   @keyframes hpdrop { 0% { transform:translateY(-10px); opacity:0; } 60% { transform:translateY(1.2px); opacity:1; } 100% { transform:none; opacity:1; } }
   @keyframes groove { from { transform:rotate(-6deg) translateY(0); } to { transform:rotate(6deg) translateY(-1.2px); } }
   @keyframes cupbeat { to { transform:scale(1.14); } }
@@ -307,6 +321,7 @@
     </g>
     <g class="spark"><path d="M6 8l1.2 2.8L10 12 7.2 13.2 6 16 4.8 13.2 2 12l2.8-1.2z"/><path d="M33 3l1 2.2L36.2 6 34 7l-1 2.2L32 7l-2.2-1L32 5.2z"/><path d="M34 28l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8-1.8-.8 1.8-.8z"/></g>
     <text class="zzz" x="30" y="9">z</text>
+    <g class="phn"><circle class="pglow" cx="31" cy="33" r="8"/><g transform="rotate(-12 31 33)"><rect class="pbody" x="27" y="27" width="8.5" height="12.5" rx="2"/><rect class="pscr" x="28" y="28.3" width="6.5" height="9.4" rx="1.1"/><path class="pline" d="M29.2 31h4.1M29.2 33.2h2.8"/><circle class="pdot" cx="33.6" cy="29.4" r="1"/></g></g>
     <text class="note n1" x="31" y="9">♪</text><text class="note n2" x="3" y="11">♫</text>
   </svg>
   <div class="dots"><i></i><i></i><i></i></div>

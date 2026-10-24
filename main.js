@@ -276,7 +276,8 @@ function sanitize(o) { // dışarıdan gelen veriyi yalnızca bilinen alanlarla 
   if (!o || typeof o !== 'object') return null;
   const a = {};
   for (const k of ['title', 'text', 'app', 'icon']) if (typeof o[k] === 'string') a[k] = o[k].slice(0, k === 'text' ? 200 : k === 'icon' ? 8 : 80);
-  if (['happy', 'alert', 'music', 'idle', 'claude', 'working', 'sad', 'drink', 'yawn', 'hungry', 'sleepy'].includes(o.mood)) a.mood = o.mood;
+  if (['happy', 'alert', 'music', 'idle', 'claude', 'working', 'sad', 'drink', 'yawn', 'hungry', 'sleepy', 'phone'].includes(o.mood)) a.mood = o.mood;
+  if (/^phoneix$/i.test(a.app || '') && (!a.mood || a.mood === 'happy')) a.mood = 'phone'; // telefondan gelen bildirimde maskot telefona bakar
   if (['type', 'run', 'read', 'search', 'think', 'agent', 'screen'].includes(o.pose)) a.pose = o.pose; // Claude çalışırken maskot duruşu
   if (o.type === 'timer') { a.type = 'timer'; a.seconds = clamp(+o.seconds || 10, 1, 86400); }
   if (isFinite(+o.ttl) && +o.ttl > 0) a.ttl = Math.min(+o.ttl, 600);
