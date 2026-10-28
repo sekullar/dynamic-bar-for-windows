@@ -63,7 +63,7 @@ const dur = (s) => { const m = /^(\d+(?:\.\d+)?)(s|m|h)?$/.exec(s || ''); return
       const child = spawn(args.join(' '), { shell: true, stdio: 'inherit' });
       child.on('exit', async (code) => {
         const s = Math.round((Date.now() - t0) / 1000), ok = code === 0, time = s >= 60 ? Math.floor(s / 60) + ' dk ' + (s % 60) + ' sn' : s + ' sn';
-        await post('/notify', { title: ok ? 'Tamamlandı' : 'Hata (kod ' + code + ')', text: name + ' · ' + time, icon: ok ? '✅' : '❌', mood: ok ? 'happy' : 'alert', ttl: ok ? 5 : 8, app: 'dynbar run' });
+        await post('/notify', { title: ok ? 'Tamamlandı' : 'Hata (kod ' + code + ')', text: name + ' · ' + time, icon: ok ? '✅' : '❌', mood: ok ? (s >= 30 ? 'party' : 'happy') : 'sad', ttl: ok ? 5 : 8, app: 'dynbar run' });
         process.exit(code == null ? 1 : code);
       });
       return;

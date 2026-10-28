@@ -1,5 +1,5 @@
 # Dynamic Bar izleyicisi. İki şey yazar (satır satır):
-#   "SinifAdi|0" ya da "SinifAdi|1"  ön plandaki pencerenin sınıfı ve tam ekran olup olmadığı (masaüstü algılama, tam ekranda gizleme)
+#   "SinifAdi|0|0" ya da "SinifAdi|1|1"  ön plandaki pencerenin sınıfı, tam ekran olup olmadığı ve Windows'un oyun/tam ekran durumu (masaüstü algılama, tam ekranda gizleme, oyun modu)
 #   "VDESK|<masaüstü-kimliği>"        bar penceresi geçerli sanal masaüstünde DEĞİLSE (masaüstü değiştirilmiş); kimlik geçerli masaüstünündür
 # stdin'den "HWND|<sayı>" satırı alır: bar penceresinin tutamacı (main.js gönderir).
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
@@ -31,6 +31,12 @@ public static class Dbw {
   [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr m, ref MONITORINFO mi);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);
+
+  // Windows'un kendi "rahatsız etme" durumu: 2 tam ekran uygulama, 3 tam ekran Direct3D (oyun), 4 sunum modu. Oyunlarda pencere boyutu sezgisi tutmasa bile doğru çıkar.
+  public static bool Game() {
+    try { int s; return SHQueryUserNotificationState(out s) == 0 && (s == 2 || s == 3 || s == 4); } catch { return false; }
+  }
 
   static IVirtualDesktopManager vdm;
 
@@ -84,7 +90,7 @@ public static class Dbw {
         fs = covers && !caption;
       }
     }
-    return c + "|" + (fs ? "1" : "0");
+    return c + "|" + (fs ? "1" : "0") + "|" + (Game() ? "1" : "0");
   }
 }
 '@

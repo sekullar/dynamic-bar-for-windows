@@ -20,14 +20,19 @@
   .seg span { display:block; text-align:center; padding:10px; border-radius:12px; background:#1f1c29; font-size:13px; border:1px solid transparent; transition:border-color .2s, background .2s; }
   .seg input:checked + span { border-color:#ffc2d9; background:#262233; }
   .btn { margin-top:12px; width:100%; padding:11px; border:0; border-radius:14px; background:#1f1c29; color:#f3eef8; font:inherit; font-weight:600; cursor:pointer; } .btn:hover { background:#262233; }
-  #test { margin-top:20px; background:#ffc2d9; color:#2a1a24; font-weight:650; } #test:hover { background:#ffd1e2; }
+  #tabs { position:sticky; top:0; z-index:5; display:flex; gap:4px; margin:14px -8px 6px; padding:8px; background:#14121aee; backdrop-filter:blur(8px); }
+  .tb { flex:1; padding:9px 4px; border:0; border-radius:12px; background:transparent; color:#b9b0c8; font:inherit; font-size:13px; cursor:pointer; transition:background .2s, color .2s; }
+  .tb:hover { background:#1f1c29; } .tb.on { background:#ffc2d9; color:#2a1a24; font-weight:650; }
+  section[data-tab] > h2:first-child { margin-top:12px; }
   small { color:#b9b0c8; font-size:12px; line-height:1.4; display:block; margin:-2px 2px 10px; }
 </style></head><body>
-<h1>Dynamic Bar ayarları</h1><div id="root"></div>
+<h1>Dynamic Bar ayarları</h1><nav id="tabs"></nav><div id="root"></div>
+<div id="backup" hidden>
 <button id="test" class="btn">Test bildirimi gönder</button>
 <button id="exp" class="btn">Ayarları panoya kopyala (yedek)</button>
 <button id="imp" class="btn">Panodan ayarları yükle</button>
 <button id="reset" class="btn">Tüm ayarları varsayılana döndür</button>
+</div>
 <script src="palette.js"></script>
 <script>
 (async () => {
@@ -67,6 +72,7 @@
     S('ttlScale', 'Bildirim süresi', [['0.6', 'Kısa'], ['1', 'Normal'], ['1.5', 'Uzun'], ['2', 'Çok uzun']], true) +
     T('startupToast', 'Açılışta selam ver', 'Uygulama başlayınca küçük bir karşılama bildirimi gösterir.') +
     T('hideFullscreen', 'Tam ekranda gizle', 'Oyun veya tam ekran video açıkken bar kendini gizler.') +
+    T('gameMode', 'Oyun modu', 'Oyun (ör. Valorant), tam ekran uygulama ya da sunum açıkken bildirimler ertelenir; bitince "kaçırdıkların" özetlenir. Windows’un kendi oyun ve tam ekran algısı kullanılır.') +
     T('autostart', 'Windows ile başlat', 'Oturum açınca Dynamic Bar kendiliğinden açılır.') +
     X('panelKey', 'Paneli aç/kapat kısayolu', 'Control+Alt+B') + X('testKey', 'Test bildirimi kısayolu', 'Control+Alt+N') +
     '<small>Örnek: Control+Alt+B, Alt+Shift+D. Bar tıklanmazsa bu kısayol paneli yine açar.</small>' +
@@ -102,24 +108,20 @@
     X('rates', 'Para birimleri (virgülle, en fazla 3)', 'USD,EUR,GBP') + X('rateBase', 'Karşılaştırma birimi', 'TRY') +
     S('clock24', 'Saat biçimi', [['true', '24 saat'], ['false', '12 saat']]) +
     T('clockSeconds', 'Saniyeyi göster', 'Paneldeki saat saniyeyle birlikte görünür.') +
-    H('Bildirimler ve entegrasyon') +
+    H('Bildirimler') +
     T('mediaToasts', 'Parça değişince bildir', 'Yeni şarkı başlayınca bar kısa süre genişleyip adını gösterir.') +
     T('osd', 'Ses ve parlaklık göstergesi', 'Ses veya parlaklık değişince bar küçük bir gösterge açar. Parlaklık sadece destekleyen ekranlarda çalışır. Windows’un kendi göstergesini gizlemek için aşağıdaki deneysel ayara bak.') +
     T('osdVol', 'Ses göstergesini bar göstersin', 'Kapalıyken ses değişince bar bir şey göstermez, yalnızca Windows’un göstergesi çıkar.') +
     T('osdHideWin', 'Ses: Windows göstergesini gizle (deneysel)', 'Ses tuşlarını (artır, azalt, sessiz) bu uygulama yakalar ve sesi kendisi değiştirir; Windows’un göstergesi çıkmaz, yalnızca bar gösterir. Parlaklık için çalışmaz. Uygulama kapanınca tuşlar normale döner.') +
     T('osdBri', 'Parlaklık göstergesini bar göstersin', 'Kapalıyken parlaklık değişince bar bir şey göstermez, yalnızca Windows’un göstergesi çıkar.') +
-    T('api', 'Dış programlardan bildirim', 'HTTP ve WebSocket (127.0.0.1:47800) ile komut satırı aracı. Sadece bu bilgisayardan erişilir.') +
-    T('spotlightSearch', 'Spotlight araması', 'Spotlight\'ta "Dynamic Bar ile entegre ol" açıkken arama kısayolu aramayı adadan açar (yukarıdaki dış program erişimi açık olmalı).') +
     T('batteryToasts', 'Pil uyarıları', 'Pil %20 altına düşünce ve şarj dolunca bildirir.') +
     T('dnd', 'Rahatsız etme', 'Açıkken bildirimler gösterilmez (test ve zamanlayıcılar hariç). Tray menüsünden de değiştirilebilir.') +
     T('focusDnd', 'Pomodoro odak turunda rahatsız etme', 'Odak turu sürerken bildirimler bekletilir (zamanlayıcılar ve yüksek öncelikliler hariç). Tur bitince kaçırdıkların özetlenir.') +
     S('sound', 'Bildirim sesi', [['off', 'Kapalı'], ['soft', 'Yumuşak'], ['normal', 'Normal']]) +
     X('mutedApps', 'Sessize alınan uygulamalar (virgülle)', 'slack, discord') +
-    '<label class="row2 col"><b>API anahtarı</b><input type="text" data-k="apiToken" placeholder="boş = yerel erişim anahtarsız"></label>' +
-    '<button class="btn" id="gentok" style="margin:-2px 0 10px">Rastgele anahtar üret</button>' +
-    '<small>Anahtar tanımlıysa dış programlar "Authorization: Bearer ANAHTAR" göndermelidir (CLI için DYNBAR_TOKEN ortam değişkeni).</small>' +
     T('quietOn', 'Sessiz saatler', 'Belirlediğin saat aralığında rahatsız etme otomatik açılır.') +
     Tm('quietFrom', 'Başlangıç') + Tm('quietTo', 'Bitiş') +
+    H('Yaşam ve sağlık') +
     T('lifeMascot', 'Maskotun günlük yaşamı', 'Sabah esner, öğlen acıkır, gece uykulu olur; her dilimde bir selam verir.') +
     T('meetingMode', 'Toplantı modu', 'Takvimde etkinlik sürerken rahatsız etme otomatik açılır, bitince kaçırdıkların özetlenir (ICS takvim gerekir).') +
     S('waterGoal', 'Günlük su hedefi', [['6', '6 bardak'], ['8', '8 bardak'], ['10', '10 bardak']], true) +
@@ -138,10 +140,51 @@
     T('claudeLive', 'Canlı durum', 'Claude çalışırken maskot laptop açıp kod yazar, barda ne yaptığı görünür (hook kurulu olmalı).') +
     T('claudeAsk', 'Bardan onay', 'Claude izin isteyince bar Onayla / Reddet düğmeleri gösterir. Yanıtlamazsan terminaldeki soru geçerli kalır.') +
     T('claudeAi', 'Yapay zekâ özeti', 'İş bitince son yanıt kısa bir model çağrısıyla 10 kelimeye özetlenir (küçük bir kullanım maliyeti olur).') +
+    H('Dış programlar') +
+    T('api', 'Dış programlardan bildirim', 'HTTP ve WebSocket (127.0.0.1:47800) ile komut satırı aracı. Sadece bu bilgisayardan erişilir.') +
+    T('spotlightSearch', 'Spotlight araması', 'Spotlight\'ta "Dynamic Bar ile entegre ol" açıkken arama kısayolu aramayı adadan açar (dış program erişimi açık olmalı).') +
+    '<label class="row2 col"><b>API anahtarı</b><input type="text" data-k="apiToken" placeholder="boş = yerel erişim anahtarsız"></label>' +
+    '<button class="btn" id="gentok" style="margin:-2px 0 10px">Rastgele anahtar üret</button>' +
+    '<small>Anahtar tanımlıysa dış programlar "Authorization: Bearer ANAHTAR" göndermelidir (CLI için DYNBAR_TOKEN ortam değişkeni).</small>' +
+    H('Gizlilik') +
+    T('privacyAlert', 'Mikrofon ve kamera uyarısı', 'Bir uygulama mikrofonu ya da kamerayı kullanmaya başlayınca kısa bir uyarı çıkar, maskot o sırada mikrofon ya da kamera tutar. Ses veya görüntü kaydedilmez, yalnızca Windows’un kullanım kaydı okunur.') +
+    T('netAlert', 'İnternet kesintisi uyarısı', 'Bağlantı gidince maskot üzülür ve kısa bir kart çıkar, geri gelince haber verir.') +
     H('Video render') +
-    T('renderLive', 'Render durumu', 'DaVinci Resolve render alırken maskot montaj yapar, barda gerçek ilerleme ve kalan süre görünür.') +
+    T('renderLive', 'Render durumu', 'DaVinci Resolve render alırken maskot montaj yapar, barda gerçek ilerleme ve kalan süre görünür. Premiere Pro, Media Encoder ve CapCut en iyi çabayla desteklenir. Render bitince maskot kutlar.') +
+    H('Klavye ışığı') +
+    T('kbdLight', 'Klavye ışığı geri bildirimi', 'Olay olunca klavyenin arka ışığı kısa bir desenle yanıp söner, sonra eski parlaklığa döner. Yalnızca Legion ve LOQ cihazlar için: açılsın mı? Legion Toolkit kurulu ve çalışıyor olmalı, ayarlarında "CLI" etkin olmalı. Renkli aydınlatma değil, beyaz ışık kapalı/düşük/yüksek yapılır.') +
+    T('kbdCall', 'Arama geldiğinde', 'Kapalı / yüksek, seri şekilde yanıp söner (Phoneix araması).') +
+    T('kbdRender', 'Render bittiğinde', 'Düşük / yüksek, iki kez yanıp söner.') +
+    T('kbdTimer', 'Zamanlayıcı ve pomodoro bittiğinde', 'Kapalı / yüksek, iki kez yanıp söner.') +
+    T('kbdBattery', 'Pil azaldığında', 'Bilgisayarın ya da telefonun pili azalınca yavaş yanıp söner.') +
+    T('kbdNotif', 'Her bildirimde', 'Bildirim gelince ışık kısa bir an kısılır. Sık bildirim alıyorsan rahatsız edebilir. Rahatsız etme, oyun ve odak modlarında çalışmaz.') +
+    '<small id="kbdstat" style="display:block;margin:-2px 0 6px"></small>' +
+    '<button class="btn" id="kbdtest" style="margin:0 0 10px">Klavye ışığını dene</button>' +
     H('İki parmakla kaydırma hassasiyeti') +
     '<div class="seg">' + [[260, 'Yavaş'], [160, 'Orta'], [90, 'Hızlı']].map(([v, t]) => `<label><input type="radio" name="swipe" value="${v}" data-k="swipe" data-num><span>${t}</span></label>`).join('') + '</div>';
+
+  // Uzun listeyi sekmelere böl: her <h2> başlığı kendi sekmesine ait bir bölüm açar
+  const TAB = { 'Maskot': 'look', 'Görünüm': 'look', 'Konum ve davranış': 'behave', 'İki parmakla kaydırma hassasiyeti': 'behave', 'Panel sayfaları': 'pages',
+    'Bildirimler': 'notify', 'Yaşam ve sağlık': 'notify', 'Gizlilik': 'notify', 'Video render': 'notify', 'Klavye ışığı': 'notify',
+    'Gönder (kargo)': 'apps', 'Claude Code': 'apps', 'Dış programlar': 'apps' };
+  const TABS = [['look', 'Görünüm'], ['behave', 'Davranış'], ['pages', 'Panel'], ['notify', 'Bildirimler'], ['apps', 'Bağlantılar'], ['backup', 'Yedek']];
+  const secs = {}; let curTab = 'look';
+  [...root.children].forEach((el) => {
+    if (el.tagName === 'H2') curTab = TAB[el.textContent] || curTab;
+    if (!secs[curTab]) { secs[curTab] = document.createElement('section'); secs[curTab].dataset.tab = curTab; }
+    secs[curTab].append(el);
+  });
+  const bk = document.createElement('section'); bk.dataset.tab = 'backup'; bk.append(...document.getElementById('backup').children); secs.backup = bk;
+  document.getElementById('backup').remove();
+  root.replaceChildren(...TABS.map(([t]) => secs[t]).filter(Boolean));
+  const showTab = (t) => {
+    document.querySelectorAll('#tabs .tb').forEach((b) => b.classList.toggle('on', b.dataset.t === t));
+    Object.entries(secs).forEach(([k, s]) => { s.hidden = k !== t; });
+    scrollTo(0, 0);
+  };
+  const tabs = document.getElementById('tabs');
+  TABS.forEach(([t, name]) => { const b = document.createElement('button'); b.className = 'tb'; b.dataset.t = t; b.textContent = name; b.onclick = () => showTab(t); tabs.append(b); });
+  showTab('look');
 
   const sw = document.getElementById('sw');
   Object.entries(PALETTE).forEach(([k, p]) => {
@@ -168,6 +211,11 @@
   });
   document.getElementById('accclr').onclick = () => dynbar.setSettings({ accent: '' });
   document.getElementById('test').onclick = () => dynbar.test();
+  const KBD = { ok: '✓ Legion Toolkit bağlı, klavye ışığı kontrol edilebiliyor.', missing: 'Legion Toolkit bulunamadı. Bu özellik yalnızca Lenovo Legion ve LOQ dizüstülerde, Legion Toolkit kuruluyken çalışır.',
+    stopped: 'Legion Toolkit çalışmıyor ya da ayarlarında "CLI" kapalı. Toolkit’i aç, Ayarlar’dan CLI’yi etkinleştir.', unsupported: 'Bu cihazda beyaz klavye ışığı kontrolü desteklenmiyor.', error: 'Klavye ışığı okunamadı.' };
+  const kbdStat = async () => { try { document.getElementById('kbdstat').textContent = KBD[await dynbar.invoke('kbd:status')] || ''; } catch {} };
+  document.getElementById('kbdtest').onclick = () => { dynbar.send('kbd:test'); setTimeout(kbdStat, 2500); };
+  kbdStat();
   document.getElementById('gentok').onclick = () => { const a = new Uint8Array(12); crypto.getRandomValues(a); dynbar.setSettings({ apiToken: [...a].map((x) => x.toString(16).padStart(2, '0')).join('') }); };
   const flash = (id, t) => { const b = document.getElementById(id), o = b.textContent; b.textContent = t; setTimeout(() => (b.textContent = o), 1600); };
   document.getElementById('exp').onclick = async () => { const { todos, apiToken, ...rest } = cur; try { await navigator.clipboard.writeText(JSON.stringify(rest)); flash('exp', 'Kopyalandı ✓'); } catch { flash('exp', 'Kopyalanamadı'); } };

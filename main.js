@@ -6,6 +6,9 @@ const spotlight = require('./spotlight');
 const appbar = require('./appbar');
 const parcel = require('./parcel');
 const render = require('./render');
+const privacy = require('./privacy');
+const internet = require('./internet');
+const kbdlight = require('./kbdlight');
 
 // Windows, pencere başka bir sanal masaüstündeyken (veya 4 parmakla masaüstü/çalışma alanı geçişinde) Chromium'a pencerenin
 // "örtülü" olduğunu bildirir; Chromium da çizimi ve fare girdisini durdurur, geri dönünce arayüz tepkisiz kalır. Bu takibi kapat.
@@ -24,7 +27,7 @@ const DEFAULTS = {
   uiScale: 1, offsetY: 10, bg: 'black', bgAlpha: 100, shadow: 'soft', anim: 'spring',
   // konum ve davranış (mode: float | dock | desktop (yüzen, sadece masaüstünde) | dock-desktop (yapışık, sadece masaüstünde))
   // reserveSpace: bar her zaman görünürken ekranın üstünde pencerelere yer bırakmaz (görev çubuğu gibi); sadece masaüstü modlarında uygulanmaz
-  mode: 'float', reserveSpace: true, display: 0, hideFullscreen: true, autostart: false,
+  mode: 'float', reserveSpace: true, display: 0, hideFullscreen: true, gameMode: true, autostart: false,
   openOn: 'click', closeDelay: 3.5, sleepAfter: 20, ttlScale: 1, startupToast: true, swipe: 160,
   panelKey: 'Control+Alt+B', testKey: 'Control+Alt+N',
   // sayfalar
@@ -42,7 +45,9 @@ const DEFAULTS = {
   // Claude Code: canlı durum (laptop maskotu), bardan onay, yapay zekâ özeti
   claudeLive: true, claudeAsk: true, claudeAi: true, pageClaude: true,
   // video render durumu (DaVinci Resolve): maskot montaj yapar, barda ilerleme ve kalan süre
-  renderLive: true,
+  renderLive: true, privacyAlert: true, netAlert: true,
+  // klavye ışığı geri bildirimi (Lenovo Legion / LOQ + Legion Toolkit): varsayılan kapalı, olaylar tek tek açılıp kapatılır
+  kbdLight: false, kbdCall: true, kbdRender: true, kbdTimer: true, kbdBattery: true, kbdNotif: false,
   // kargo: dosyayı adaya sürükleyip bırak, maskot götürsün. Gizli değerler (parcelTgToken, parcelDiscord) şifreli saklanır (aşağıda SECRET)
   parcel: true, parcelAutoFolders: true, parcelFolders: '', parcelTgToken: '', parcelTgChat: '', parcelDiscord: '', parcelWaPhone: '',
   // maskotun günlük yaşamı, su hedefi, toplantı modu
@@ -57,7 +62,7 @@ const pickKnown = (p) => { const o = {}; if (p && typeof p === 'object') for (co
 if (!app.requestSingleInstanceLock()) app.quit();
 let win, settingsWin, tray, demoIndex = 0;
 const alive = (w) => w && !w.isDestroyed();
-let onDesktop = true, fullscreen = false, raised = false, watcher, mediaProc, media = { none: true }, focus = false, missed = [], held = [];
+let onDesktop = true, fullscreen = false, game = false, raised = false, watcher, mediaProc, media = { none: true }, focus = false, missed = [], held = [];
 const settingsFocused = () => alive(settingsWin) && settingsWin.isFocused();
 
 // --- tıklama bölgesi: pencere şeffaf ve büyük; yalnızca adanın üstündeyken fareyi yakalar, diğer yerde arkadaki uygulamalara geçirir.
@@ -170,7 +175,7 @@ const quiet = () => {
   return a === b ? false : a < b ? c >= a && c < b : c >= a || c < b;
 };
 const mutedApp = (a) => a.app && String(settings.mutedApps || '').toLowerCase().split(/[,\n]+/).map((x) => x.trim()).filter(Boolean).includes(String(a.app).toLowerCase());
-const suppressed = (a) => !a.force && (settings.dnd || quiet() || (focus && settings.focusDnd !== false));
+const suppressed = (a) => !a.force && (settings.dnd || quiet() || game || (focus && settings.focusDnd !== false));
 const cbs = new Map(); // bildirim düğmelerinin geri çağrıları: cbId -> {url, data}
 const send = (a) => {
   if (!alive(win)) return;
@@ -279,7 +284,7 @@ function sanitize(o) { // dışarıdan gelen veriyi yalnızca bilinen alanlarla 
   if (!o || typeof o !== 'object') return null;
   const a = {};
   for (const k of ['title', 'text', 'app', 'icon']) if (typeof o[k] === 'string') a[k] = o[k].slice(0, k === 'text' ? 200 : k === 'icon' ? 8 : 80);
-  if (['happy', 'alert', 'music', 'idle', 'claude', 'working', 'sad', 'drink', 'yawn', 'hungry', 'sleepy', 'phone', 'render', 'call', 'talk', 'hangup'].includes(o.mood)) a.mood = o.mood;
+  if (['happy', 'alert', 'music', 'idle', 'claude', 'working', 'sad', 'drink', 'yawn', 'hungry', 'sleepy', 'phone', 'render', 'call', 'talk', 'hangup', 'party', 'mic', 'cam', 'miccam', 'offline', 'lowbat'].includes(o.mood)) a.mood = o.mood;
   if (/^phoneix$/i.test(a.app || '') && (!a.mood || a.mood === 'happy')) a.mood = 'phone'; // telefondan gelen bildirimde maskot telefona bakar
   if (['type', 'run', 'read', 'search', 'think', 'agent', 'screen'].includes(o.pose)) a.pose = o.pose; // Claude çalışırken maskot duruşu
   if (o.type === 'timer') { a.type = 'timer'; a.seconds = clamp(+o.seconds || 10, 1, 86400); }
@@ -334,7 +339,7 @@ function handleApi(cmd, o) {
     case 'water': if (alive(win)) win.webContents.executeJavaScript('window.barApi && window.barApi.waterAsk && window.barApi.waterAsk()').catch(() => {}); return 'ok';
     case 'todo': todo(o); return 'ok';
     case 'status':
-      return JSON.stringify({ app: 'dynamic-bar', version: app.getVersion(), dnd: !!settings.dnd, focus, quiet: quiet(), todos: (settings.todos || []).filter((x) => !x.d).length,
+      return JSON.stringify({ app: 'dynamic-bar', version: app.getVersion(), dnd: !!settings.dnd, focus, quiet: quiet(), game, todos: (settings.todos || []).filter((x) => !x.d).length,
         claude: { live: settings.claudeLive !== false, ask: settings.claudeAsk !== false, ai: settings.claudeAi !== false },
         media: media.none || !media.title ? null : { title: media.title, artist: media.artist || '', status: media.status || '' } });
   }
@@ -563,10 +568,13 @@ function startWatcher() {
       onWorkspaceSwitch(l.slice(6));
       return;
     }
-    const [c, f] = l.split('|');
+    const [c, f, g] = l.split('|');
     const prev = onDesktop + '|' + fullscreen;
+    const wasGame = game; game = g === '1' && settings.gameMode !== false;
+    if (wasGame && !game) setTimeout(flushMissed, 1500); // oyun bitti: bastırılan bildirimler özetlenir
+    if (wasGame !== game) LOG('oyun modu', game ? 'açık' : 'kapalı');
     onDesktop = ['Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd', 'XamlExplorerHostIslandWindow', 'MultitaskingViewFrame'].includes(c);
-    fullscreen = f === '1' && !onDesktop;
+    fullscreen = (f === '1' || game) && !onDesktop;
     updateVisibility();
     if (prev !== onDesktop + '|' + fullscreen) burst(); // masaüstüne geçiş: üst katmanı ve tıklama durumunu art arda tazele
   });
@@ -617,6 +625,9 @@ ipcMain.on('interactive', (_e, v) => {
 });
 ipcMain.on('dom-click', () => { lastDomClick = Date.now(); });ipcMain.on('raise', (_e, v) => { raised = v; updateVisibility(); });
 ipcMain.on('test', demo);
+ipcMain.on('kbd', (_e, kind) => { if (kbdlight.kinds.includes(kind)) kbdlight.pulse(kind); });
+ipcMain.on('kbd:test', () => kbdlight.pulse('render', true));
+ipcMain.handle('kbd:status', () => kbdlight.status());
 
 app.whenReady().then(() => {
   load(); createWindow(); createTray(); startServer(); syncLink(); startWatchers();
@@ -629,11 +640,14 @@ app.whenReady().then(() => {
     }
   }
   render.init({ settings: () => settings, send, ps, lines, dismiss: (key) => { if (alive(win)) win.webContents.send('dismiss', { key }); } });
+  privacy.init({ settings: () => settings, send, ps, lines });
+  internet.init({ settings: () => settings, send, onResume: (f) => powerMonitor.on('resume', f) });
+  kbdlight.init({ settings: () => settings, muted: () => suppressed({}) });
   extras.init({ settings: () => settings, win: () => win, send, ps, lines, ws: wsMessage, allowReq, meeting: setMeeting });
   regKeys(); reserve();
   setInterval(hitTest, 30); setInterval(reassert, 4000);
   ['display-added', 'display-removed', 'display-metrics-changed'].forEach((e) => screen.on(e, recover));
   ['resume', 'unlock-screen'].forEach((e) => powerMonitor.on(e, recover));
 });
-app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); render.stop(); });
+app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); render.stop(); privacy.stop(); internet.stop(); });
 app.on('window-all-closed', (e) => e.preventDefault()); // ayar penceresi kapanınca uygulama kapanmasın

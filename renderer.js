@@ -151,6 +151,19 @@
     queue.push(a); if (!busy || isAmbient(cur)) next(); // Claude canlı durumu diğer bildirimleri bekletmez
   }
 
+  function confetti() { // renkli kâğıt parçaları adanın üstünden dökülür
+    const cols = ['#ff6fa5', '#ffd24f', '#4aa8ff', '#5ee09a', '#b48cff', '#ff9f43'];
+    for (let i = 0; i < 22; i++) {
+      const c = document.createElement('i'); c.className = 'confetti';
+      c.style.left = (6 + Math.random() * 88) + '%'; c.style.background = cols[i % cols.length];
+      c.style.setProperty('--x', (Math.random() * 50 - 25) + 'px'); c.style.setProperty('--y', (50 + Math.random() * 40) + 'px');
+      c.style.setProperty('--r', (Math.random() * 720 - 360) + 'deg'); c.style.setProperty('--d', (1.2 + Math.random() * 0.9) + 's');
+      c.style.animationDelay = (Math.random() * 0.35) + 's';
+      island.append(c); setTimeout(() => c.remove(), 2600);
+    }
+  }
+  const kbdKind = (a) => a.mood === 'call' ? 'call' : a.key === 'render-done' ? 'render' : a.mood === 'lowbat' ? 'battery'
+    : !a.key && a.type !== 'timer' && !isAmbient(a) && !['music', 'claude', 'working', 'render'].includes(a.mood) ? 'notif' : '';
   function next() {
     clearTimeout(nextT); clearInterval(timerT);
     if (typing) endTyping();
@@ -164,6 +177,8 @@
     setTimeout(() => {
       paintNotif(a);
       setMood('idle'); void mascot.offsetWidth; setMood(a.mood || 'happy');
+      if (a.mood === 'party') confetti();
+      const kb = kbdKind(a); if (kb) dynbar.send('kbd', kb); // klavye ışığı geri bildirimi (Legion/LOQ, ayardan açılırsa)
       if (a.mood === 'claude') { clearTimeout(morphT); morphT = setTimeout(() => { if (cur === a) setMood('happy'); }, 3400); } // Claude Code maskotu bir süre kalır, sonra eski haline döner
       if (mini) { island.classList.remove('expanded', 'open', 'ask'); content.classList.remove('swap'); schedule(a); return; }
       island.classList.add('expanded'); content.classList.remove('swap');
@@ -177,7 +192,7 @@
     const tick = () => {
       const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
       text.textContent = fmt(left); fill.style.width = (100 - (left / total) * 100) + '%';
-      if (left <= 0) { clearInterval(timerT); title.textContent = 'Süre doldu!'; text.textContent = a.title || ''; setMood('alert'); ping('alert'); nextT = setTimeout(next, 3500); }
+      if (left <= 0) { clearInterval(timerT); title.textContent = 'Süre doldu!'; text.textContent = a.title || ''; setMood('alert'); ping('alert'); dynbar.send('kbd', 'timer'); nextT = setTimeout(next, 3500); }
     };
     clearInterval(timerT); tick(); timerT = setInterval(tick, 250);
   }

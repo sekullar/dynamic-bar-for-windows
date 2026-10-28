@@ -7,14 +7,16 @@
   const stat = (id, v) => { $('#s' + id).style.width = v + '%'; $('#s' + id + 'v').textContent = v + '%'; };
   dynbar.on('sys', (d) => { stat('cpu', d.cpu); stat('mem', d.mem); });
   if (navigator.getBattery) navigator.getBattery().then((b) => {
-    let low = !b.charging && b.level <= .2, full = b.charging && b.level >= 1; // başlangıçta gereksiz uyarı verme
+    let low = !b.charging && b.level <= .2, full = b.charging && b.level >= 1, was = b.charging; // başlangıçta gereksiz uyarı verme
     const u = () => {
       const lv = Math.round(b.level * 100); stat('bat', lv); $('#sbatv').textContent = lv + '%' + (b.charging ? '⚡' : '');
       if (S.batteryToasts === false) return;
-      if (!b.charging && lv <= 20 && !low) { low = true; api.enqueue({ title: 'Pil azaldı', text: '%' + lv + ' kaldı, şarja tak', mood: 'alert', ttl: 5 }); }
+      if (!b.charging && lv <= 20 && !low) { low = true; api.enqueue({ title: 'Pil azaldı', text: '%' + lv + ' kaldı · enerjim bitiyor, şarja tak 🔌', mood: 'lowbat', ttl: 6 }); }
       if (b.charging || lv > 25) low = false;
-      if (b.charging && lv >= 100 && !full) { full = true; api.enqueue({ title: 'Pil dolu', text: 'Şarjı çıkarabilirsin', mood: 'happy', ttl: 4 }); }
+      if (b.charging && lv >= 100 && !full) { full = true; api.enqueue({ title: 'Pil dolu', text: 'Şarjı çıkarabilirsin', icon: '🔋', mood: 'party', ttl: 4 }); }
       if (!b.charging || lv < 95) full = false;
+      if (b.charging && !was && lv < 100) api.enqueue({ title: 'Şarja takıldı', text: '%' + lv + ' ⚡', mood: 'happy', ttl: 2.5 });
+      was = b.charging;
     };
     u(); ['levelchange', 'chargingchange'].forEach((ev) => b.addEventListener(ev, u));
   });
@@ -54,7 +56,8 @@
     if (left > 0) return paint();
     if (ph === 'focus') { rounds++; ph = rounds % (S.pomoRounds || 4) ? 'brk' : 'long'; } else ph = 'focus';
     left = dur()[ph]; endAt = Date.now() + left * 1000; paint();
-    api.enqueue({ title: ph === 'focus' ? 'Odaklanma zamanı' : 'Mola zamanı', text: ph === 'focus' ? 'Hadi başlayalım' : 'Biraz dinlen', mood: ph === 'focus' ? 'alert' : 'happy', ttl: 5, force: true });
+    window.dynbar.send('kbd', 'timer');
+    api.enqueue({ title: ph === 'focus' ? 'Odaklanma zamanı' : 'Mola zamanı', text: ph === 'focus' ? 'Hadi başlayalım' : 'Biraz dinlen', mood: ph === 'focus' ? 'alert' : 'party', ttl: 5, force: true });
   }
   $('#pgo').onclick = () => { run = !run; clearInterval(pt); if (run) { endAt = Date.now() + left * 1000; pt = setInterval(tick, 1000); } paint(); };
   $('#prs').onclick = () => { run = false; clearInterval(pt); ph = 'focus'; left = dur().focus; rounds = 0; paint(); };
@@ -203,14 +206,14 @@
   api.waterAsk = waterAsk;
 
   // --- maskotun günlük yaşamı: sabah esner, öğlen acıkır, gece uykulu olur ---
-  const SLOT = (h) => (h >= 6 && h < 11 ? 'morning' : h >= 12 && h < 14 ? 'lunch' : h >= 23 || h < 5 ? 'night' : null);
-  const LIFE = { morning: ['yawn', 'Günaydın ☀️', 'Güne hazır mısın?'], lunch: ['hungry', 'Yemek vakti 🍽️', 'Bir şeyler atıştır'], night: ['sleepy', 'Geç oldu 🌙', 'Artık yatma vakti'] };
+  const SLOT = (h, m) => (h >= 6 && h < 11 ? 'morning' : h >= 12 && h < 14 ? 'lunch' : (h === 23 && m >= 30) || h < 5 ? 'night' : null);
+  const LIFE = { morning: ['yawn', 'Günaydın ☀️', 'Güne hazır mısın?'], lunch: ['hungry', 'Yemek vakti 🍽️', 'Bir şeyler atıştır'], night: () => (new Date().getHours() === 23 || new Date().getHours() === 0 ? ['yawn', 'Esneme vakti 🥱', 'Geç oldu, uykun geliyor mu?'] : ['sleepy', 'Uykum geldi 😴', 'Artık yatma vakti']) };
   function life() {
     if (S.lifeMascot === false || !api.idle()) return;
-    const sl = SLOT(new Date().getHours()); if (!sl) return;
-    const key = 'life.' + today() + sl, [mood, title, text] = LIFE[sl];
+    const now = new Date(), sl = SLOT(now.getHours(), now.getMinutes()); if (!sl) return;
+    const key = 'life.' + today() + sl, [mood, title, text] = typeof LIFE[sl] === 'function' ? LIFE[sl]() : LIFE[sl];
     if (!ls.get(key)) { ls.set(key, '1'); api.enqueue({ title, text, mood, ttl: 6 }); return; } // her dilimde gün başına bir selam
-    if (Math.random() < 0.35) { api.setMood(mood); setTimeout(() => api.idle() && api.setMood('idle'), 4500); }
+    if (Math.random() < (sl === 'night' ? 0.5 : 0.35)) { api.setMood(mood); setTimeout(() => api.idle() && api.setMood('idle'), 4500); }
   }
   setTimeout(life, 25000); setInterval(life, 90000);
 

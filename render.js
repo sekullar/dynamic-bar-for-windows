@@ -1,20 +1,21 @@
-// Video render durumu: DaVinci Resolve render alırken maskot montaj yapar, barda gerçek ilerleme ve kalan süre görünür.
+// Video render durumu: DaVinci Resolve (ve en iyi çabayla Premiere Pro, Media Encoder, CapCut) render alırken maskot montaj yapar, barda gerçek ilerleme ve kalan süre görünür.
 // Okuma işini scripts/render.ps1 yapar (Resolve'un ilerleme penceresi). Süre ya da bilgisayar hızı varsayılmaz: yüzde ve kalan süre Resolve'dan gelir.
 const KEY = 'render';
 const GRACE = 2500; // pencere bir an bulunamazsa (UI Automation tıkanması) render bitti sayılmaz
-let ctx, proc = null, stopped = false, active = false, startedAt = 0, lastPct = 0, endT = null;
+let ctx, proc = null, stopped = false, active = false, startedAt = 0, lastPct = 0, endT = null, appName = 'DaVinci Resolve';
 
 const pad = (n) => String(n).padStart(2, '0');
 const dur = (ms) => { const s = Math.round(ms / 1000); return s >= 3600 ? `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}` : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
 
-function begin(pct, rem, fps) {
+function begin(pct, rem, fps, app) {
   clearTimeout(endT); endT = null;
+  if (app) appName = app;
   if (!active) { active = true; startedAt = Date.now(); }
   lastPct = pct;
   // Render başında Resolve kısa süre 00:00:00 gösterir: bu gerçek bir "kalan süre" değil, yazmayız
   const left = rem && rem !== '00:00:00' ? ` · kalan ${rem}` : pct < 2 ? ' · hazırlanıyor' : '';
   ctx.send({
-    title: `Render · %${pct}`, text: `DaVinci Resolve${left}${fps ? ` · ${fps} fps` : ''}`, icon: '🎬',
+    title: `Render · %${pct}`, text: `${appName}${left}${fps ? ` · ${fps} fps` : ''}`, icon: '🎬',
     mood: 'render', key: KEY, progress: Math.min(1, Math.max(0, pct / 100)), ttl: 20,
   });
 }
@@ -27,8 +28,8 @@ function finish() {
   // Pencere %90'dan sonra kapandıysa render bitti; daha önce kapandıysa kullanıcı iptal etti, bildirim gösterme
   if (lastPct >= 90) {
     setTimeout(() => ctx.send({
-      title: 'Render tamamlandı', text: `DaVinci Resolve · ${dur(Date.now() - startedAt)}`, icon: '✅',
-      mood: 'happy', key: 'render-done', ttl: 6, force: true,
+      title: 'Render tamamlandı', text: `${appName} · ${dur(Date.now() - startedAt)}`, icon: '🎉',
+      mood: 'party', key: 'render-done', ttl: 6, force: true,
     }), 350);
   }
 }
@@ -36,8 +37,8 @@ function finish() {
 function onLine(l) {
   if (ctx.settings().renderLive === false) { if (active) { active = false; ctx.dismiss(KEY); } return; }
   if (l.startsWith('R|')) {
-    const [, pct, rem, fps] = l.split('|');
-    if (isFinite(+pct)) begin(Math.round(+pct), rem, fps);
+    const [, pct, rem, fps, app] = l.split('|');
+    if (isFinite(+pct)) begin(Math.round(+pct), rem, fps, app);
   } else if (l === 'N' && active && !endT) {
     endT = setTimeout(finish, GRACE);
   }
