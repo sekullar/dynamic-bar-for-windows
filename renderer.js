@@ -127,11 +127,19 @@
     clearTimeout(nextT);
     nextT = setTimeout(next, a.sticky ? 300000 : (a.ttl || 4) * 1000 * (cfg.ttlScale || 1));
   }
-  const isAmbient = (x) => x && x.key === 'claude' && x.mood === 'working';
+  // Canlı durumlar: kapanana kadar adada kalır, diğer bildirimlerin önüne geçmez, küçültülebilir. anahtar -> maskot hali
+  const AMBIENT = { claude: ['working'], render: ['render'], call: ['call', 'talk'] }; // anahtar -> geçerli maskot halleri
+  const isAmbient = (x) => !!x && !!AMBIENT[x.key] && AMBIENT[x.key].includes(x.mood);
+  const ambientMood = (x) => (x && AMBIENT[x.key] && (AMBIENT[x.key].includes(x.mood) ? x.mood : AMBIENT[x.key][0])) || 'working';
   function push(a) {
-    if (a.key === 'claude') { // Claude canlı durumu: diğer bildirimlerin önüne geçmez, onlar bitince geri gelir
-      if (a.mood === 'working') { ambient = a; if (!busy) { queue.unshift(a); next(); } return; }
-      ambient = null; miniClaude = false;
+    if (AMBIENT[a.key]) { // canlı durum (Claude, render): diğer bildirimlerin önüne geçmez, onlar bitince geri gelir
+      if (isAmbient(a)) {
+        ambient = a;
+        if (a.key === 'call') { miniClaude = false; if (busy && (!cur || cur.key !== 'call')) { queue.unshift(a); next(); return; } } // gelen arama bekletilmez
+        if (!busy) { queue.unshift(a); next(); } return;
+      }
+      if (ambient && ambient.key === a.key) ambient = null;
+      miniClaude = false;
     }
     if (a.key) queue = queue.filter((q) => q.key !== a.key); // aynı anahtarlı bekleyen eskiyi at
     if (queue.length >= 50) queue.shift();
@@ -240,8 +248,8 @@
     armed = insideCur(); // kısayolla açıldıysa ve imleç dışarıdaysa, imleç bir kez içeri girene kadar kendiliğinden kapanmaz
     go(playing && pages.includes($('#media')) ? 0 : Math.max(0, pages.indexOf($('#clockSec'))), true);
   }
-  function showMini() { miniClaude = true; island.classList.remove('expanded', 'open', 'ask'); dynbar.raise(false); setMood('working'); }
-  function restoreFull() { miniClaude = false; if (cur) paintNotif(cur); island.classList.remove('open'); island.classList.add('expanded'); dynbar.raise(true); setMood('working'); }
+  function showMini() { miniClaude = true; island.classList.remove('expanded', 'open', 'ask'); dynbar.raise(false); setMood(ambientMood(cur)); }
+  function restoreFull() { miniClaude = false; if (cur) paintNotif(cur); island.classList.remove('open'); island.classList.add('expanded'); dynbar.raise(true); setMood(ambientMood(cur)); }
   function closePanel() {
     clearTimeout(closeT); clearTimeout(leaveT); leaveT = 0;
     if (!busy) return collapse();
@@ -267,13 +275,13 @@
 
   // olaylar
   dynbar.onActivity((a) => {
-    if (a.key && busy && cur && cur.key === a.key) { cur = a; if (isAmbient(a)) ambient = a; paintNotif(a); if (a.parcel) setMood(a.mood || 'courier'); schedule(a); return; } // aynı anahtar: yerinde güncelle (ilerleme, ses/parlaklık göstergesi)
+    if (a.key && busy && cur && cur.key === a.key) { const prevMood = cur.mood; cur = a; if (isAmbient(a)) ambient = a; paintNotif(a); if (isAmbient(a) && a.mood !== prevMood) setMood(miniClaude ? ambientMood(a) : a.mood); if (a.parcel) setMood(a.mood || 'courier'); schedule(a); return; } // aynı anahtar: yerinde güncelle (ilerleme, ses/parlaklık göstergesi)
     push(a);
   });
   dynbar.on('missed', (list) => (list || []).forEach(addHist));
   dynbar.on('dismiss', (d) => {
     const key = d && d.key;
-    if (!key || key === 'claude') ambient = null;
+    if (!key || (ambient && ambient.key === key)) ambient = null;
     queue = key ? queue.filter((q) => q.key !== key) : [];
     if (busy && (!key || (cur && cur.key === key))) next();
   });

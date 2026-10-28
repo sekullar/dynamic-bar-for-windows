@@ -138,6 +138,8 @@
     T('claudeLive', 'Canlı durum', 'Claude çalışırken maskot laptop açıp kod yazar, barda ne yaptığı görünür (hook kurulu olmalı).') +
     T('claudeAsk', 'Bardan onay', 'Claude izin isteyince bar Onayla / Reddet düğmeleri gösterir. Yanıtlamazsan terminaldeki soru geçerli kalır.') +
     T('claudeAi', 'Yapay zekâ özeti', 'İş bitince son yanıt kısa bir model çağrısıyla 10 kelimeye özetlenir (küçük bir kullanım maliyeti olur).') +
+    H('Video render') +
+    T('renderLive', 'Render durumu', 'DaVinci Resolve render alırken maskot montaj yapar, barda gerçek ilerleme ve kalan süre görünür.') +
     H('İki parmakla kaydırma hassasiyeti') +
     '<div class="seg">' + [[260, 'Yavaş'], [160, 'Orta'], [90, 'Hızlı']].map(([v, t]) => `<label><input type="radio" name="swipe" value="${v}" data-k="swipe" data-num><span>${t}</span></label>`).join('') + '</div>';
 

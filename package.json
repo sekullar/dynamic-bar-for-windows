@@ -1,6 +1,6 @@
 {
   "name": "dynamic-bar",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Dynamic Island style bar with a tiny mascot: notifications, media, Claude Code live status",
   "main": "main.js",
   "bin": {
@@ -38,6 +38,7 @@
       "spotlight.js",
       "appbar.js",
       "parcel.js",
+      "render.js",
       "parcel-ui.js",
       "parcel.html",
       "destinations.js",

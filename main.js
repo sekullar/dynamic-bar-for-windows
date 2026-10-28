@@ -5,6 +5,7 @@ const vdesk = require('./vdesk');
 const spotlight = require('./spotlight');
 const appbar = require('./appbar');
 const parcel = require('./parcel');
+const render = require('./render');
 
 // Windows, pencere başka bir sanal masaüstündeyken (veya 4 parmakla masaüstü/çalışma alanı geçişinde) Chromium'a pencerenin
 // "örtülü" olduğunu bildirir; Chromium da çizimi ve fare girdisini durdurur, geri dönünce arayüz tepkisiz kalır. Bu takibi kapat.
@@ -40,6 +41,8 @@ const DEFAULTS = {
   mediaToasts: true, artOnline: true, osd: true, osdVol: true, osdBri: true, osdHideWin: false, api: true, apiToken: '', mutedApps: '', focusDnd: true, sound: 'off', spotlightSearch: true,
   // Claude Code: canlı durum (laptop maskotu), bardan onay, yapay zekâ özeti
   claudeLive: true, claudeAsk: true, claudeAi: true, pageClaude: true,
+  // video render durumu (DaVinci Resolve): maskot montaj yapar, barda ilerleme ve kalan süre
+  renderLive: true,
   // kargo: dosyayı adaya sürükleyip bırak, maskot götürsün. Gizli değerler (parcelTgToken, parcelDiscord) şifreli saklanır (aşağıda SECRET)
   parcel: true, parcelAutoFolders: true, parcelFolders: '', parcelTgToken: '', parcelTgChat: '', parcelDiscord: '', parcelWaPhone: '',
   // maskotun günlük yaşamı, su hedefi, toplantı modu
@@ -276,7 +279,7 @@ function sanitize(o) { // dışarıdan gelen veriyi yalnızca bilinen alanlarla 
   if (!o || typeof o !== 'object') return null;
   const a = {};
   for (const k of ['title', 'text', 'app', 'icon']) if (typeof o[k] === 'string') a[k] = o[k].slice(0, k === 'text' ? 200 : k === 'icon' ? 8 : 80);
-  if (['happy', 'alert', 'music', 'idle', 'claude', 'working', 'sad', 'drink', 'yawn', 'hungry', 'sleepy', 'phone'].includes(o.mood)) a.mood = o.mood;
+  if (['happy', 'alert', 'music', 'idle', 'claude', 'working', 'sad', 'drink', 'yawn', 'hungry', 'sleepy', 'phone', 'render', 'call', 'talk', 'hangup'].includes(o.mood)) a.mood = o.mood;
   if (/^phoneix$/i.test(a.app || '') && (!a.mood || a.mood === 'happy')) a.mood = 'phone'; // telefondan gelen bildirimde maskot telefona bakar
   if (['type', 'run', 'read', 'search', 'think', 'agent', 'screen'].includes(o.pose)) a.pose = o.pose; // Claude çalışırken maskot duruşu
   if (o.type === 'timer') { a.type = 'timer'; a.seconds = clamp(+o.seconds || 10, 1, 86400); }
@@ -625,11 +628,12 @@ app.whenReady().then(() => {
       setTimeout(() => send({ title: 'Eksik bağımlılık', text: 'npm install çalıştır (koffi); bazı özellikler kısıtlı', icon: '⚠️', mood: 'alert', ttl: 8, force: true }), 4000);
     }
   }
+  render.init({ settings: () => settings, send, ps, lines, dismiss: (key) => { if (alive(win)) win.webContents.send('dismiss', { key }); } });
   extras.init({ settings: () => settings, win: () => win, send, ps, lines, ws: wsMessage, allowReq, meeting: setMeeting });
   regKeys(); reserve();
   setInterval(hitTest, 30); setInterval(reassert, 4000);
   ['display-added', 'display-removed', 'display-metrics-changed'].forEach((e) => screen.on(e, recover));
   ['resume', 'unlock-screen'].forEach((e) => powerMonitor.on(e, recover));
 });
-app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); });
+app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); render.stop(); });
 app.on('window-all-closed', (e) => e.preventDefault()); // ayar penceresi kapanınca uygulama kapanmasın

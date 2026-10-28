@@ -280,6 +280,50 @@
   body[data-anim=smooth] { --spring: cubic-bezier(.22,.9,.3,1); --spring-soft: cubic-bezier(.22,.9,.3,1); }
   body[data-anim=off] * { animation:none !important; transition-duration:.01s !important; }
   .wrow { display:flex; justify-content:space-between; gap:12px; font-size:13px; margin:4px 0; color:#ffffffb8; } .wrow b { color:#fff; font-weight:600; font-variant-numeric:tabular-nums; }
+  /* render: maskot montaj yapar. Monitörde zaman çizelgesi, oynatma çizgisi kayar, patiler fareyi sürükler. Duruş çalışan maskotla aynı */
+  .ed { opacity:0; transform:translate(6px,8px); transform-box:fill-box; transition:opacity .3s, transform .6s var(--ease); pointer-events:none; }
+  .ed .elid { fill:#14141b; stroke:#6a6a78; stroke-width:.7; } .ed .ebase { fill:#55555f; } .ed .phead { fill:#fff; }
+  .ed .paw { fill:var(--body); stroke:var(--ear); stroke-width:.6; }
+  #mascot[data-mood=render] .ed { opacity:1; transform:none; }
+  #mascot[data-mood=render] .body-g { animation:workbob 2.4s ease-in-out infinite; }
+  #mascot[data-mood=render] .eye { animation:blinkN 5s infinite; }
+  #mascot[data-mood=render] #eyes { animation:scan .9s ease-in-out infinite alternate; }
+  #mascot[data-mood=render] .mouth { display:none; }
+  #mascot[data-mood=render] .brow, #mascot[data-mood=render] .focusm { opacity:1; }
+  #mascot[data-mood=render] .brow, #mascot[data-mood=render] .focusm { transform:translateX(2.2px); }
+  #mascot[data-mood=render] .glow { opacity:.5; animation:glowp 1.8s ease-in-out infinite; }
+  #mascot[data-mood=render] .phead { animation:scrub 2.8s linear infinite; }
+  #mascot[data-mood=render] .ed .p3 { animation:scrubpaw 2.8s linear infinite; }
+  #mascot[data-mood=render] .ed .p4 { animation:type .3s ease-in-out infinite; }
+  @keyframes scrub { 0% { transform:translateX(0); } 100% { transform:translateX(6.6px); } }
+  @keyframes scrubpaw { 0% { transform:translate(0,0); } 50% { transform:translate(-.6px,-.7px); } 100% { transform:translate(0,0); } }
+  /* arama: çalıyor (call), görüşme (talk), kapandı (hangup) */
+  .cl { opacity:0; transition:opacity .25s; pointer-events:none; }
+  .cl .cb { fill:#14141b; stroke:#7a7a88; stroke-width:.6; } .cl .cs { fill:#4aa8ff; } .cl .cd { fill:#2fb36d; }
+  .cl .cpw { fill:var(--body); stroke:var(--ear); stroke-width:.6; } .cl .arc { fill:none; stroke:#ffd166; stroke-width:1; stroke-linecap:round; opacity:0; } .cl .wv { opacity:0; }
+  .cl .cph, .cl .cp1, .cl .wv { transform-box:fill-box; transform-origin:50% 100%; }
+  #mascot[data-mood=call] .cl, #mascot[data-mood=talk] .cl, #mascot[data-mood=hangup] .cl { opacity:1; }
+  #mascot[data-mood=call] .cph { animation:ringshake .16s linear infinite alternate; }
+  #mascot[data-mood=call] .cp1 { animation:ringshake .16s linear infinite alternate; }
+  #mascot[data-mood=call] .cs { animation:glowp .5s ease-in-out infinite; }
+  #mascot[data-mood=call] .arc { animation:arcp .9s ease-out infinite; } #mascot[data-mood=call] .a2 { animation-delay:.25s; }
+  #mascot[data-mood=call] .body-g { animation:hop .55s var(--ease) infinite; }
+  #mascot[data-mood=call] .eye { animation:none; transform:scaleY(1.18); } #mascot[data-mood=call] .brow { opacity:0; }
+  #mascot[data-mood=call] .mouth { display:none; } #mascot[data-mood=call] .yawnm { opacity:.9; }
+  #mascot[data-mood=talk] .cph { transform:translate(.4px,-9px) rotate(8deg); } #mascot[data-mood=talk] .cp1 { transform:translate(.4px,-9px); }
+  #mascot[data-mood=talk] .cs { fill:#2fb36d; } #mascot[data-mood=talk] .cd { fill:#fff; }
+  #mascot[data-mood=talk] .body-g { animation:workbob 2.6s ease-in-out infinite; }
+  #mascot[data-mood=talk] .mouth { animation:talkm .28s ease-in-out infinite alternate; transform-box:fill-box; transform-origin:50% 0; }
+  #mascot[data-mood=talk] .brow { opacity:0; } #mascot[data-mood=talk] .glow { opacity:.4; animation:glowp 1.8s ease-in-out infinite; }
+  #mascot[data-mood=hangup] .cph { transform-origin:50% 50%; transform:translate(-3px,1px) rotate(90deg); animation:hangdrop .55s var(--ease) both; } #mascot[data-mood=hangup] .cp1 { opacity:0; }
+  #mascot[data-mood=hangup] .cs { fill:#e5484d; }
+  #mascot[data-mood=hangup] .wv { opacity:1; animation:wave .45s ease-in-out .3s 5 alternate; }
+  #mascot[data-mood=hangup] .body-g { animation:hop .7s var(--ease) 2; } #mascot[data-mood=hangup] .brow { opacity:0; }
+  @keyframes ringshake { from { transform:rotate(-9deg); } to { transform:rotate(9deg); } }
+  @keyframes arcp { 0% { opacity:0; } 30% { opacity:1; } 100% { opacity:0; transform:translateX(-2px); } }
+  @keyframes talkm { from { transform:scaleY(.4); } to { transform:scaleY(1.5); } }
+  @keyframes hangdrop { from { transform:translate(.4px,-9px) rotate(8deg); } to { transform:translate(-3px,1px) rotate(90deg); } }
+  @keyframes wave { from { transform:rotate(-24deg); } to { transform:rotate(24deg); } }
   @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition-duration:.01s !important; } }
 </style></head>
 <body data-mode="float">
@@ -304,7 +348,18 @@
       <path class="lid" d="M28.5 21.5L38.5 20V32L28.5 33.5z"/><path class="lgo" d="M34 23.6l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/>
       <path class="lbase" d="M27.5 33.3L39 32l1 2.6-13.2 1.7z"/>
       <ellipse class="paw p1" cx="25.2" cy="33.6" rx="2.3" ry="1.8"/><ellipse class="paw p2" cx="28.4" cy="35" rx="2.3" ry="1.8"/>
-      <text class="code c1" x="30" y="17">&lt;/&gt;</text><text class="code c2" x="1" y="13">{ }</text><text class="code c3" x="30" y="17">&gt;_</text>
+      <text class="code c1" x="27.5" y="16">&lt;/&gt;</text><text class="code c2" x="1" y="13">{ }</text><text class="code c3" x="30" y="17">&gt;_</text>
+    </g>
+    <g class="ed">
+      <path class="elid" d="M28.5 21.5L38.5 20V32L28.5 33.5z"/>
+      <g transform="matrix(1 -.15 0 1 0 4.275)"><rect class="clip" x="29.6" y="23.4" width="3.6" height="1.9" rx=".4" fill="#4aa8ff"/><rect class="clip" x="33.5" y="23.4" width="3.6" height="1.9" rx=".4" fill="#ffb347"/><rect class="clip" x="29.6" y="26.2" width="2.3" height="1.9" rx=".4" fill="#b47bff"/><rect class="clip" x="32.2" y="26.2" width="4.9" height="1.9" rx=".4" fill="#4aa8ff"/><rect class="clip" x="29.6" y="29" width="5.6" height="1.9" rx=".4" fill="#ff6b8b"/><rect class="clip" x="35.5" y="29" width="1.6" height="1.9" rx=".4" fill="#8fe3a8"/><rect class="phead" x="29.6" y="22.4" width=".8" height="9" rx=".3"/></g>
+      <path class="ebase" d="M27.5 33.3L39 32l1 2.6-13.2 1.7z"/>
+      <ellipse class="paw p3" cx="25.2" cy="33.6" rx="2.3" ry="1.8"/><ellipse class="paw p4" cx="28.4" cy="35" rx="2.3" ry="1.8"/>
+    </g>
+    <g class="cl">
+      <path class="arc a1" d="M27.4 23.5q-2 2.8 0 5.6"/><path class="arc a2" d="M25 22q-3.6 4.3 0 8.6"/>
+      <g class="cph"><rect class="cb" x="29" y="22" width="8" height="13" rx="2"/><rect class="cs" x="30" y="23.4" width="6" height="9.6" rx="1"/><circle class="cd" cx="33" cy="30.3" r="1.2"/></g>
+      <ellipse class="cpw cp1" cx="31.2" cy="34.6" rx="2.4" ry="2"/><ellipse class="cpw wv" cx="6" cy="28" rx="2.4" ry="2.8"/>
     </g>
     <ellipse class="chinpaw" cx="21" cy="31.5" rx="2.6" ry="2.1"/>
     <g class="think"><circle cx="31" cy="12" r=".9"/><circle cx="33.4" cy="8.6" r="1.3"/><circle cx="36" cy="4.6" r="1.9"/></g>
