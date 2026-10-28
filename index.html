@@ -114,7 +114,7 @@
   #mascot[data-mood=working][data-pose=search] .mag { opacity:1; animation:magbob 1.3s ease-in-out infinite; }
   #mascot[data-mood=working][data-pose=search] .brow { transform:translate(2.2px,-1.4px); }
   #mascot[data-mood=working][data-pose=search] .eye { animation:none; transform:scaleY(1); }
-  #mascot[data-mood=working][data-pose=run] .code.c1 { animation:none; opacity:0; } #mascot[data-mood=working][data-pose=run] .code.c3 { animation:blink 1s steps(1) infinite; opacity:1; }
+  #mascot[data-mood=working][data-pose=run] .code.c1 { animation:none; opacity:0; } #mascot[data-mood=working][data-pose=run] .code.c3 { animation:promptp 2.6s ease-in-out infinite; }
   #mascot[data-mood=working][data-pose=agent] .spark { animation:sparkle 2.4s ease-out infinite; }
   /* çalışırken ara sıra: kameraya bakıp gülümseme, bir yudum, gerinme */
   #mascot[data-mood=working][data-sub=glance] #eyes { animation:lookCam 1s linear infinite; }
@@ -195,7 +195,7 @@
   @keyframes sparkle { 0% { opacity:0; transform:scale(.2) rotate(0); } 35% { opacity:1; transform:scale(1.25) rotate(40deg); } 100% { opacity:0; transform:scale(.6) rotate(90deg); } }
   @keyframes breathe { 50% { transform:scale(1.05) translateY(-.5px); } }
   @keyframes breatheBig { 0%,100% { transform:scale(1.55); } 50% { transform:scale(1.6) translateY(-1px); } }
-  @keyframes blink { 0%,93%,100% { transform:scaleY(1); } 96% { transform:scaleY(.1); } }
+  @keyframes blink { 0%,91%,100% { transform:scaleY(1); } 93% { transform:scaleY(.1); } 95% { transform:scaleY(1); } 97% { transform:scaleY(.1); } }
   @keyframes hop { 0%,100% { transform:translateY(0) scale(1,1); } 40% { transform:translateY(-4px) scale(.94,1.1); } 70% { transform:translateY(0) scale(1.08,.92); } }
   @keyframes wiggle { 25% { transform:rotate(-8deg); } 75% { transform:rotate(8deg); } }
   @keyframes pulse { 50% { opacity:.25; } }
@@ -324,6 +324,16 @@
   @keyframes talkm { from { transform:scaleY(.4); } to { transform:scaleY(1.5); } }
   @keyframes hangdrop { from { transform:translate(.4px,-9px) rotate(8deg); } to { transform:translate(-3px,1px) rotate(90deg); } }
   @keyframes wave { from { transform:rotate(-24deg); } to { transform:rotate(24deg); } }
+  /* SVG öğeleri kendi kutularından ölçeklensin / dönsün (yoksa dönüşüm sol üst köşeden yapılır ve öğe ışınlanır) */
+  .think circle, .mag, .mug, .note, .zzz, .sweat, .food, .code { transform-box:fill-box; transform-origin:center; }
+  .mag { transform-origin:30% 30%; } .mug { transform-origin:30% 100%; }
+  .cur { animation:curblink 1s ease-in-out infinite; }
+  @keyframes promptp { 0% { opacity:0; transform:translateY(4px); } 18%,72% { opacity:1; transform:translateY(0); } 100% { opacity:0; transform:translateY(-5px); } }
+  @keyframes curblink { 0%,45% { opacity:1; } 60%,90% { opacity:.15; } 100% { opacity:1; } }
+  /* küçük canlılıklar: mutluyken pırıltı çıkar (gözlerin etrafa bakması extras-ui.js'te) */
+  /* küçültülmüş canlı durumda (Claude, render, arama) gözler sabit pozlarını bırakıp imleci takip eder */
+  #island.claudework:not(.expanded) #mascot #eyes { animation:none; }
+  #mascot[data-mood=happy] .spark { animation:sparkle 1.3s ease-out .15s; }
   @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition-duration:.01s !important; } }
 </style></head>
 <body data-mode="float">
@@ -348,7 +358,7 @@
       <path class="lid" d="M28.5 21.5L38.5 20V32L28.5 33.5z"/><path class="lgo" d="M34 23.6l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7z"/>
       <path class="lbase" d="M27.5 33.3L39 32l1 2.6-13.2 1.7z"/>
       <ellipse class="paw p1" cx="25.2" cy="33.6" rx="2.3" ry="1.8"/><ellipse class="paw p2" cx="28.4" cy="35" rx="2.3" ry="1.8"/>
-      <text class="code c1" x="27.5" y="16">&lt;/&gt;</text><text class="code c2" x="1" y="13">{ }</text><text class="code c3" x="30" y="17">&gt;_</text>
+      <text class="code c1" x="27.5" y="16">&lt;/&gt;</text><text class="code c2" x="1" y="13">{ }</text><text class="code c3" x="29" y="16">&gt;<tspan class="cur">_</tspan></text>
     </g>
     <g class="ed">
       <path class="elid" d="M28.5 21.5L38.5 20V32L28.5 33.5z"/>

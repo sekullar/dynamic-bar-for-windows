@@ -126,10 +126,26 @@
   };
   dynbar.onSettings(applyS); dynbar.getSettings().then(applyS);
 
-  dynbar.on('cursor', ({ x, y }) => { // ana süreç imleci ekranın her yerinden takip eder
-    if (S.eyes === false) return;
+  // Gözler imleci izler; arada (5-13 sn) bir göz kırpıp kısa süre imleçten başka yöne bakar
+  let gaze = null, away = null;
+  const look = () => {
+    if (S.eyes === false || !gaze) return;
     const r = mascot.getBoundingClientRect(), c = (v) => Math.max(-1, Math.min(1, v / 160));
-    $('#eyes').style.transform = `translate(${c(x - r.left - r.width / 2) * 1.8}px, ${c(y - r.top - r.height / 2) * 1.4}px)`;
+    const x = away ? away.x : c(gaze.x - r.left - r.width / 2) * 1.8, y = away ? away.y : c(gaze.y - r.top - r.height / 2) * 1.4;
+    $('#eyes').style.transform = `translate(${x}px, ${y}px)`;
+  };
+  const blinkNow = () => document.querySelectorAll('#mascot .eye').forEach((e) => e.animate([{ transform: 'scaleY(1)' }, { transform: 'scaleY(.1)' }, { transform: 'scaleY(1)' }], { duration: 190 }));
+  const glance = () => {
+    if (S.eyes !== false && gaze) {
+      blinkNow();
+      setTimeout(() => { away = { x: (Math.random() < .5 ? -1 : 1) * (1.2 + Math.random() * .8), y: (Math.random() - .35) * 1.6 }; look(); }, 140);
+      setTimeout(() => { away = null; look(); if (Math.random() < .5) blinkNow(); }, 140 + 700 + Math.random() * 900);
+    }
+    setTimeout(glance, 5000 + Math.random() * 8000);
+  };
+  setTimeout(glance, 6000);
+  dynbar.on('cursor', ({ x, y }) => { // ana süreç imleci ekranın her yerinden takip eder
+    gaze = { x, y }; look();
   });
   mascot.addEventListener('click', () => { // tıklama yine adaya ulaşır (panel açılır); maskot ayrıca kalp çıkarır
     if (S.pet === false) return;
