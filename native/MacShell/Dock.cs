@@ -23,6 +23,12 @@ class DockWindow : Surface
     public List<DockItem> Items = new();
     public float Size = 40; public Action<string, object> Emit;
     public bool AutoHide, PreviewOn = true;
+    float peak = .40f, springK = .13f, springD = .78f, spread = 1.35f, tipK = .28f;
+    public void SetAnim(string a)
+    {
+        switch (a) { case "soft": peak = .26f; springK = .075f; springD = .88f; spread = 1.6f; tipK = .16f; break; case "off": peak = 0f; springK = .2f; springD = .7f; spread = 1.35f; tipK = .28f; break; default: peak = .40f; springK = .13f; springD = .78f; spread = 1.35f; tipK = .28f; break; }
+        Dirty = true;
+    }
     ID2D1Bitmap1 wall; string wallSig; float wallIw, wallIh, bdSw, bdSh, bdOx, bdOy;
     ID2D1Bitmap1 glass; string glassSig;
     float[] cur = Array.Empty<float>(), vel = Array.Empty<float>(), baseX = Array.Empty<float>(), slotX = Array.Empty<float>(), dx = Array.Empty<float>();
@@ -35,7 +41,7 @@ class DockWindow : Surface
     // önizleme
     int prevIdx = -1, cand = -1; DateTime candSince = DateTime.MinValue, prevLeave = DateTime.MinValue; float prevA;
     RawRectF panel; List<RawRectF> cells = new(); int cellHot = -1; readonly List<IntPtr> thumbs = new(); List<WinInfo> prevWins = new();
-    Matrix3x2 Tb = Matrix3x2.Identity; bool busy;
+    Matrix3x2 Tb = Matrix3x2.Identity; bool busy; float extL, extR;
 
     public DockWindow(int x, int y, int w, int h) : base("MacShell Dock", x, y, w, h) { }
 
@@ -96,11 +102,11 @@ class DockWindow : Surface
         bool mag = hov && !dragging && shown > .9f;
         for (int i = 0; i < cur.Length; i++)
         {
-            float target = mag ? 1 + .40f * MathF.Exp(-MathF.Pow((mx - baseX[i]) / (unit * 1.35f), 2)) : 1;
-            vel[i] = (vel[i] + (target - cur[i]) * .13f) * .78f; cur[i] += vel[i];
+            float target = mag ? 1 + peak * MathF.Exp(-MathF.Pow((mx - baseX[i]) / (unit * spread), 2)) : 1;
+            vel[i] = (vel[i] + (target - cur[i]) * springK) * springD; cur[i] += vel[i];
             if (MathF.Abs(target - cur[i]) > .002f || MathF.Abs(vel[i]) > .002f) busy = true; else cur[i] = target;
         }
-        float tgt = (mag && hoverIdx >= 0 && prevIdx < 0) ? 1 : 0; float p0 = tipA; tipA += (tgt - tipA) * .28f; if (MathF.Abs(tgt - tipA) < .01f) tipA = tgt; if (tipA != p0) busy = true;
+        float tgt = (mag && hoverIdx >= 0 && prevIdx < 0) ? 1 : 0; float p0 = tipA; tipA += (tgt - tipA) * tipK; if (MathF.Abs(tgt - tipA) < .01f) tipA = tgt; if (tipA != p0) busy = true;
         // slot kaydırma (sürüklerken komşular yer açar)
         for (int i = 0; i < Items.Count && i < dx.Length; i++)
         {
@@ -139,7 +145,15 @@ class DockWindow : Surface
         if (dockW <= 0) return;
         Dc.Transform = Tb;
         var r0 = DockRect; float cr = R, grow = cur.Sum(c => (c - 1) * (B + Gap)); if (grow < 0) grow = 0;
-        var r = new RawRectF(r0.Left - grow / 2, r0.Top, r0.Right + grow / 2, r0.Bottom);
+        float tot = cur.Sum(c => (c - 1) * (B + Gap)), accP = 0, gl = r0.Left - grow / 2, gr = r0.Right + grow / 2;
+        var cxs = new float[Items.Count];
+        for (int i = 0; i < Items.Count; i++)
+        {
+            float e = (cur[i] - 1) * (B + Gap); cxs[i] = r0.Left + dx[i] + B / 2 + accP + e / 2 - tot / 2; accP += e;
+            float hw = B * cur[i] / 2; gl = Math.Min(gl, cxs[i] - hw - 6); gr = Math.Max(gr, cxs[i] + hw + 6);
+        }
+        extL = gl; extR = gr;
+        var r = new RawRectF(gl, r0.Top, gr, r0.Bottom);
         var rr = new RoundedRectangle(r, cr, cr);
         if (glass != null)
         {
@@ -161,12 +175,10 @@ class DockWindow : Surface
 
         foreach (var s in slots) if (s.Idx < 0) { float sx = r0.Left + s.X + SepShift(s); br.Color = new Color4(1, 1, 1, .3f); Dc.FillRectangle(new RawRectF(sx, r.Top + 10, sx + 1, r.Bottom - 12), br); }
 
-        float tot = cur.Sum(c => (c - 1) * (B + Gap)), acc = 0;
         for (int i = 0; i < Items.Count; i++)
         {
-            float e = (cur[i] - 1) * (B + Gap), shift = acc + e / 2 - tot / 2; acc += e;
             if (dragging && i == dragIdx) continue;
-            float cx = r0.Left + dx[i] + B / 2 + shift;
+            float cx = cxs[i];
             DrawItem(i, cx, r.Top + 2, cur[i], i == pressIdx && !dragging ? .84f : 1f);
         }
         if (dragging && dragIdx >= 0 && dragIdx < Items.Count) DrawItem(dragIdx, dragCx, r.Top + 2 - 6, 1.1f, 1f, true);
@@ -298,6 +310,8 @@ class DockWindow : Surface
     {
         if (dockW <= 0) return;
         var h = HitRect(); float l = h.Left, t = h.Top, r = h.Right, b = h.Bottom + 12, o = (1 - shown) * HideOff;
+        l = Math.Min(l, extL - 6); r = Math.Max(r, extR + 6); // küçülürken cam kırpılmasın
+        if (cur.Any(c => c > 1.003f) || tipA > .01f) t = Math.Min(t, DockRect.Top - 56 + o);
         if (dragging) { l = 0; t = 0; r = W; b = H; }
         else if (prevIdx >= 0) { l = Math.Min(l, panel.Left - 4); r = Math.Max(r, panel.Right + 4); t = Math.Min(t, panel.Top + o - 6); }
         SetHitRegion(l, t, r, b);
@@ -329,6 +343,11 @@ class DockWindow : Surface
         {
             bool want = hov || dragging || prevIdx >= 0 || CursorAtEdge(); if (want) leaveAt = now.AddMilliseconds(450);
             if ((want || now < leaveAt ? 1f : 0f) != shown) Dirty = true;
+        }
+        if (!hov && !Force && !dragging && prevIdx >= 0)
+        { // imleç pencereden çıktı: önizleme kapanmalı
+            if (prevLeave == DateTime.MinValue) prevLeave = now;
+            PreviewLogic(c, now, (1 - shown) * HideOff); return;
         }
         if (!hov || Force || dragging) return;
         var hr = HitRect(); float oy = (1 - shown) * HideOff;

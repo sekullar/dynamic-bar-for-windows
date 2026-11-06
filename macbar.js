@@ -193,7 +193,7 @@ function fetchIcon(key, exe, hwnd) {
   } catch (e) { ctx.log('pencere simgesi', e.message); }
   app.getFileIcon(exe, { size: 'large' }).then((img) => done(img.isEmpty() ? '' : img.toDataURL())).catch(() => done(''));
 }
-function pushPrefs() { if (alive(dockWin)) dockWin.webContents.send('prefs', { autohide: autoHide(), previews: ctx.settings().macDockPreview !== false }); }
+function pushPrefs() { if (alive(dockWin)) dockWin.webContents.send('prefs', { autohide: autoHide(), previews: ctx.settings().macDockPreview !== false, anim: ctx.settings().macDockAnim || 'lively' }); }
 function poll() {
   if (!enabled()) return;
   if (tick++ % 2 === 0) { try { if (wl.taskbarVisible()) wl.showTaskbar(false); if (tick % 10 === 1 && !wl.getAutohide()) wl.setAutohide(true); } catch {} }

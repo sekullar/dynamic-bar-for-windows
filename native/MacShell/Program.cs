@@ -70,7 +70,7 @@ static class Program
     {
         string w = Str(c, "w") ?? "all", ch = Str(c, "ch"); c.TryGetProperty("d", out var d);
         if (ch == "force-hover") { dock?.ForceHover(Num(d, "x"), (int)Num(d, "i")); return; }
-        if (ch == "prefs") { if (dock != null) { dock.AutoHide = Bool(d, "autohide"); dock.PreviewOn = !d.TryGetProperty("previews", out var pv) || pv.ValueKind != JsonValueKind.False; dock.Dirty = true; } return; }
+        if (ch == "prefs") { if (dock != null) { dock.AutoHide = Bool(d, "autohide"); dock.PreviewOn = !d.TryGetProperty("previews", out var pv) || pv.ValueKind != JsonValueKind.False; dock.SetAnim(Str(d, "anim") ?? "lively"); dock.Dirty = true; } return; }
         if (ch == "quit") { running = false; return; }
         if (ch == "bounds")
         {
