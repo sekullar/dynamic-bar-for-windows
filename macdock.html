@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>Dock</title>
+<link rel="stylesheet" href="assets/mac.css">
+<link rel="stylesheet" href="assets/glass.css">
+<style>
+  :root { --s:40px; }
+  html, body { margin:0; height:100%; background:transparent; overflow:hidden; user-select:none; cursor:default; font-family:var(--font); }
+  #wrap { position:fixed; left:0; right:0; bottom:10px; display:flex; justify-content:center; }
+  #dock { padding:6px 8px 8px; }
+  #items { display:flex; align-items:flex-end; gap:4px; }
+  .it { position:relative; width:calc(var(--s) + 10px); height:calc(var(--s) + 10px); flex:none; border-radius:calc(var(--s)*.26); display:flex; align-items:center; justify-content:center; }
+  .it .ic { width:calc(100% - 10px); height:calc(100% - 10px); display:flex; align-items:center; justify-content:center; transition:transform .45s var(--sp, ease), filter .2s; transform-origin:50% 100%; }
+  .it:active .ic { transform:scale(.84); filter:brightness(1.15); transition-duration:.12s; }
+  .it img { width:100%; height:100%; object-fit:contain; pointer-events:none; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); }
+  .it .ph { width:100%; height:100%; border-radius:24%; display:flex; align-items:center; justify-content:center; font-size:calc(var(--s)*.48); font-weight:650; color:#fff; pointer-events:none; }
+  .it.min .ic { opacity:.55; }
+  .dot { position:absolute; bottom:-6px; left:50%; width:4px; height:4px; margin-left:-2px; border-radius:50%; background:rgba(255,255,255,.7); }
+  .it.act .dot { background:#fff; box-shadow:0 0 6px rgba(255,255,255,.9); }
+  .cnt { position:absolute; top:0; right:0; min-width:15px; height:15px; padding:0 3px; box-sizing:border-box; border-radius:8px; background:#0a84ff; color:#fff; font-size:10px; line-height:15px; text-align:center; font-weight:600; }
+  .sep { width:1px; align-self:stretch; margin:4px 3px 6px; background:rgba(255,255,255,.3); flex:none; }
+  #tip { position:fixed; bottom:0; left:0; padding:5px 12px; border-radius:10px; background:rgba(40,40,46,.9); box-shadow:inset 0 1px 1px rgba(255,255,255,.3), 0 4px 14px rgba(0,0,0,.3);
+    color:#fff; font-size:13px; font-weight:500; white-space:nowrap; pointer-events:none; opacity:0; transform:translateY(4px) scale(.92); transition:opacity .15s, transform .35s var(--sp, ease); }
+  #tip.on { opacity:1; transform:none; }
+</style></head><body>
+<div id="wrap"><div id="dock"><div id="items"></div></div></div><div id="tip"></div>
+<script src="assets/glass.js"></script>
+<script>
+const dock = document.getElementById('dock'), box = document.getElementById('items'), tip = document.getElementById('tip');
+document.documentElement.style.setProperty('--sp', Glass.spring(.42));
+let items = [], size = 40, els = [], base = [], hov = false, mouseX = 0;
+const hue = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+const rect = (r) => ({ x: Math.floor(r.left), y: Math.floor(r.top), width: Math.ceil(r.width), height: Math.ceil(r.height) });
+const glass = Glass.attach(dock, { radius: 26, blur: 8, bezel: 15, scale: 24 });
+let tipRect = null;
+function shape() {
+  const d = dock.getBoundingClientRect(), r = rect(d);
+  if (hov) { r.y -= 44; r.height += 44; r.x -= 36; r.width += 72; } // büyütme sırasında simgeler dock'tan taşar
+  const list = [r]; if (tipRect) list.push(tipRect);
+  dynbar.send('macdock:shape', list);
+}
+function render() {
+  box.replaceChildren(); els = [];
+  let sepDone = false;
+  const hasPinned = items.some((i) => i.pinned), hasOther = items.some((i) => !i.pinned);
+  for (const it of items) {
+    if (hasPinned && hasOther && !it.pinned && !sepDone) { sepDone = true; const s = document.createElement('div'); s.className = 'sep'; box.append(s); }
+    const el = document.createElement('div');
+    el.className = 'it' + (it.active ? ' act' : '') + (it.minimized ? ' min' : '');
+    const ic = document.createElement('div'); ic.className = 'ic';
+    if (it.icon) { const im = document.createElement('img'); im.src = it.icon; ic.append(im); }
+    else { const p = document.createElement('div'); p.className = 'ph'; p.textContent = (it.name || '?').charAt(0).toUpperCase(); p.style.background = `hsl(${hue(it.name || '')} 45% 42%)`; ic.append(p); }
+    el.append(ic);
+    if (it.running) { const d = document.createElement('i'); d.className = 'dot'; el.append(d); }
+    if (it.count > 1) { const c = document.createElement('span'); c.className = 'cnt'; c.textContent = it.count; el.append(c); }
+    el.onmousedown = (e) => { if (e.button === 0) dynbar.send('macdock:click', it.key); };
+    el.oncontextmenu = (e) => { e.preventDefault(); hideTip(); dynbar.send('macdock:menu', it.key); };
+    el.onmouseenter = () => showTip(el, it.name);
+    el.onmouseleave = hideTip;
+    box.append(el); els.push(el);
+  }
+  hideTip(); cur = els.map(() => 1); vel = els.map(() => 0); measureBase();
+}
+// ---- Dock büyütme: imleç yakınındaki simgeler yay gibi büyür (sıvı his) ----
+let cur = [], vel = [], raf = 0;
+function measureBase() { // büyütme yokken her simgenin dock ortasına göre konumu
+  els.forEach((e) => { e.style.transform = ''; });
+  const dr = box.getBoundingClientRect(); base = els.map((e) => { const r = e.getBoundingClientRect(); return r.left + r.width / 2 - (dr.left + dr.width / 2); });
+}
+function tickMag() {
+  raf = 0; const dr = box.getBoundingClientRect(), cx = dr.left + dr.width / 2, unit = size + 14; let busy = false;
+  const mx = mouseX - cx;
+  els.forEach((e, i) => {
+    const target = hov ? 1 + .62 * Math.exp(-Math.pow((mx - base[i]) / (unit * 1.35), 2)) : 1;
+    vel[i] = (vel[i] + (target - cur[i]) * .28) * .62; cur[i] += vel[i];
+    if (Math.abs(target - cur[i]) > .002 || Math.abs(vel[i]) > .002) busy = true; else cur[i] = target;
+  });
+  // dock sabit kalır (cam yeniden çizilmez); simgeler yalnızca transform ile büyür, komşular yana kayar
+  const w = size + 10 + 4, ex = cur.map((c) => (c - 1) * w), tot = ex.reduce((a, b) => a + b, 0); let acc = 0;
+  els.forEach((e, i) => { const sh = acc + ex[i] / 2 - tot / 2; acc += ex[i]; e.style.transform = `translateX(${sh.toFixed(2)}px) scale(${cur[i].toFixed(3)})`; e.style.transformOrigin = '50% 100%'; });
+  if (busy) raf = requestAnimationFrame(tickMag); else shape();
+}
+const kick = () => { if (!raf) raf = requestAnimationFrame(tickMag); };
+dock.addEventListener('pointerenter', () => { hov = true; shape(); kick(); });
+dock.addEventListener('pointermove', (e) => { mouseX = e.clientX; kick(); });
+dock.addEventListener('pointerleave', () => { hov = false; kick(); });
+function showTip(el, text) {
+  tip.textContent = text; tip.classList.add('on');
+  const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+  tip.style.left = Math.max(4, r.left + r.width / 2 - t.width / 2) + 'px';
+  tip.style.bottom = (innerHeight - dock.getBoundingClientRect().top + 8 + (hov ? 14 : 0)) + 'px';
+  tipRect = rect(tip.getBoundingClientRect()); shape();
+}
+function hideTip() { tip.classList.remove('on'); if (tipRect) { tipRect = null; shape(); } }
+function set(p) {
+  if (!p) return;
+  if (p.size !== size) { dynbar.invoke('macdock:bd').then((b) => b && Glass.setBackdrop(b)); size = p.size || 40; glass.r = Math.round(size * .5 + 8); dock.style.borderRadius = glass.r + 'px'; }
+  document.documentElement.style.setProperty('--s', size + 'px');
+  items = p.items || []; render(); requestAnimationFrame(() => { Glass.relayout(); shape(); });
+}
+dynbar.on('macdock:items', set);
+dynbar.on('macdock:bd', (b) => Glass.setBackdrop(b));
+dynbar.invoke('macdock:bd').then((b) => b && Glass.setBackdrop(b));
+dynbar.invoke('macdock:get').then(set);
+addEventListener('resize', () => { Glass.relayout(); shape(); });
+setInterval(shape, 3000);
+</script></body></html>

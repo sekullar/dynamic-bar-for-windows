@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>Menü çubuğu</title>
+<link rel="stylesheet" href="assets/mac.css">
+<style>
+  :root { --fg:#fff; --sh:rgba(0,0,0,.35); }
+  :root.dark { --fg:#000; --sh:rgba(255,255,255,.35); }
+  html, body { margin:0; height:25px; overflow:hidden; background:transparent; user-select:none; cursor:default; font-family:var(--font); font-size:13px; font-weight:500; letter-spacing:-.006em; color:var(--fg); }
+  #bar { display:grid; grid-template-columns:1fr 188px 1fr; align-items:center; height:25px; padding:0 6px; box-sizing:border-box; text-shadow:0 0 6px var(--sh); }
+  .grp { display:flex; align-items:center; min-width:0; } .grp.r { justify-content:flex-end; }
+  .b { display:flex; align-items:center; justify-content:center; gap:5px; height:21px; padding:0 8px; border-radius:7px; color:inherit; font:inherit; background:none; border:0; cursor:default; white-space:nowrap; text-shadow:inherit;
+    transition:background .18s, transform .35s cubic-bezier(.34,1.7,.5,1); }
+  .b:hover { background:rgba(128,128,128,.28); box-shadow:inset 0 .5px 0 rgba(255,255,255,.35); }
+  .b:active, .b.open { background:rgba(128,128,128,.4); transform:scale(.94); }
+  .b.bold { font-weight:700; }
+  #menus { display:flex; align-items:center; min-width:0; overflow:hidden; }
+  #menus .b { flex:none; }
+  svg.win { filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)) drop-shadow(0 0 5px var(--sh)); }
+  svg { flex:none; filter:drop-shadow(0 0 3px var(--sh)); }
+  .fl { fill:currentColor; }
+  #clock { font-variant-numeric:tabular-nums; }
+</style></head><body>
+<div id="bar">
+  <div class="grp">
+    <button class="b" id="start" title="Başlat menüsü"><svg class="fl win" width="14" height="14" viewBox="0 0 16 16"><rect x="0" y="0" width="7.4" height="7.4" rx=".6"/><rect x="8.6" y="0" width="7.4" height="7.4" rx=".6"/><rect x="0" y="8.6" width="7.4" height="7.4" rx=".6"/><rect x="8.6" y="8.6" width="7.4" height="7.4" rx=".6"/></svg></button>
+    <div id="menus"></div>
+  </div>
+  <div></div>
+  <div class="grp r">
+    <button class="b" id="wifi" title="Wi‑Fi"><svg width="18" height="14" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1.6 5.2a10.6 10.6 0 0 1 14.8 0"/><path d="M4.2 7.9a7 7 0 0 1 9.6 0"/><path d="M6.7 10.4a3.5 3.5 0 0 1 4.6 0"/><circle cx="9" cy="12.4" r=".9" fill="currentColor" stroke="none"/></svg></button>
+    <button class="b" id="bat" hidden><span id="pct"></span><svg width="27" height="13" viewBox="0 0 27 13"><rect x=".6" y=".6" width="22.4" height="11.8" rx="3.5" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-width="1.2"/><rect id="fill" class="fl" x="2.2" y="2.2" width="19.2" height="8.6" rx="2.1"/><path class="fl" fill-opacity=".55" d="M24.6 4.2v4.6c1-.3 1.7-1.3 1.7-2.3s-.7-2-1.7-2.3z"/><path id="bolt" d="M13.4 1.6 8.2 7.1h3.3L10.4 11.4l5.4-5.6h-3.4z" fill="#fff" stroke="rgba(0,0,0,.55)" stroke-width=".9" stroke-linejoin="round" hidden/></svg></button>
+    <button class="b" id="cc" title="Denetim Merkezi"><svg width="16" height="14" viewBox="0 0 16 14"><rect x=".6" y=".6" width="14.8" height="5.2" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.2"/><circle class="fl" cx="4" cy="3.2" r="1.7"/><rect x=".6" y="8.2" width="14.8" height="5.2" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.2"/><circle class="fl" cx="12" cy="10.8" r="1.7"/></svg></button>
+    <button class="b" id="clock" title="Dynamic Bar panelini aç"></button>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+// düğmeye basınca ilgili paneli/menüyü aç: konum (DIP, ekran-bağıl) ana sürece gider
+document.addEventListener('mouseenter', () => dynbar.send('macmenu:hover'));
+addEventListener('pointermove', () => { const n = Date.now(); if (n - (window._h || 0) > 1500) { window._h = n; dynbar.send('macmenu:hover'); } });
+function open(kind, el, extra) {
+  const r = el.getBoundingClientRect();
+  document.querySelectorAll('.b.open').forEach((b) => b.classList.remove('open')); el.classList.add('open');
+  dynbar.send('macmenu:open', { kind, x: r.left, w: r.width, ...extra });
+}
+dynbar.on('macpop:closed', () => document.querySelectorAll('.b.open').forEach((b) => b.classList.remove('open')));
+$('start').onmousedown = (e) => e.button === 0 && open('apple', $('start'));
+$('wifi').onmousedown = (e) => e.button === 0 && open('wifi', $('wifi'));
+$('cc').onmousedown = (e) => e.button === 0 && open('cc', $('cc'));
+$('clock').onmousedown = () => dynbar.send('macmenu:panel');
+dynbar.on('macmenu:menus', (list) => {
+  const box = $('menus'); box.replaceChildren();
+  (list || []).forEach((m) => {
+    const b = document.createElement('button'); b.className = 'b' + (m.kind === 'app' ? ' bold' : ''); b.textContent = m.label; b.title = m.title || '';
+    b.onmousedown = (e) => e.button === 0 && open(m.kind, b, { i: m.i, label: m.label });
+    box.append(b);
+  });
+});
+dynbar.on('macmenu:theme', (t) => document.documentElement.classList.toggle('dark', !t.light));
+const clock = () => { $('clock').textContent = new Date().toLocaleString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).replace(/,/g, ''); };
+clock(); setInterval(clock, 10000);
+const net = () => { $('wifi').style.opacity = navigator.onLine ? 1 : .45; };
+addEventListener('online', net); addEventListener('offline', net); net();
+if (navigator.getBattery) navigator.getBattery().then((b) => {
+  const u = () => {
+    const p = Math.round(b.level * 100); $('bat').hidden = false; $('pct').textContent = p + '%';
+    $('fill').setAttribute('width', Math.max(1.5, 19.2 * b.level));
+    $('fill').style.fill = b.charging ? '#30d158' : (p <= 20 ? '#ff453a' : 'currentColor');
+    $('bolt').toggleAttribute('hidden', !b.charging); // şarj olurken pilin içinde şimşek
+  };
+  ['levelchange', 'chargingchange'].forEach((e) => b.addEventListener(e, u)); u();
+}).catch(() => {});
+dynbar.send('macmenu:ready');
+</script></body></html>

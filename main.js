@@ -9,6 +9,7 @@ const render = require('./render');
 const privacy = require('./privacy');
 const internet = require('./internet');
 const kbdlight = require('./kbdlight');
+const macbar = require('./macbar');
 
 // Windows, pencere başka bir sanal masaüstündeyken (veya 4 parmakla masaüstü/çalışma alanı geçişinde) Chromium'a pencerenin
 // "örtülü" olduğunu bildirir; Chromium da çizimi ve fare girdisini durdurur, geri dönünce arayüz tepkisiz kalır. Bu takibi kapat.
@@ -27,6 +28,8 @@ const DEFAULTS = {
   uiScale: 1, offsetY: 10, bg: 'black', bgAlpha: 100, shadow: 'soft', anim: 'spring',
   // konum ve davranış (mode: float | dock | desktop (yüzen, sadece masaüstünde) | dock-desktop (yapışık, sadece masaüstünde))
   // reserveSpace: bar her zaman görünürken ekranın üstünde pencerelere yer bırakmaz (görev çubuğu gibi); sadece masaüstü modlarında uygulanmaz
+  // macbar: Windows görev çubuğunu gizleyip yerine macOS menü çubuğu (üst) ve Dock (alt) koyar; dockPins: Dock'a sabitlenen exe yolları (satır satır)
+  macbar: false, macNative: true, macIconPack: true, macDockHide: false, macDockPreview: true, macMenu: true, macDock: true, macDockSize: 40, macMenuText: 'auto', dockPins: '',
   mode: 'float', reserveSpace: true, display: 0, hideFullscreen: true, gameMode: true, autostart: false,
   openOn: 'click', closeDelay: 3.5, sleepAfter: 20, ttlScale: 1, startupToast: true, swipe: 160,
   panelKey: 'Control+Alt+B', testKey: 'Control+Alt+N',
@@ -106,6 +109,7 @@ function hitTest() {
   pollClick(x >= hit.x && x <= hit.x + hit.width && y >= hit.y && y <= hit.y + hit.height);
 }
 function reassert() { // Windows bazen en üst katmanı düşürür: periyodik olarak geri al
+  macbar.reassert(); // önce menü çubuğu ve Dock, ada her zaman onların üstünde kalsın
   if (!alive(win) || !win.isVisible()) return;
   try { win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
   win.setAlwaysOnTop(true, 'screen-saver'); win.moveTop(); ignoring = null; isHovered = false; applyShape(true);
@@ -130,6 +134,7 @@ function onWorkspaceSwitch(guid) {
   const now = Date.now(); if (now - vLast < 400) return; vLast = now; // watcher tekrar tekrar bildirir; seyrelt
   if (guid && vdesk.moveHere(win.getNativeWindowHandle(), guid)) vFail = 0;
   else if (win.isVisible() && ++vFail >= 3 && now - lastRehome > 5000) { vFail = 0; lastRehome = now; return rehome(); }
+  macbar.onWorkspaceSwitch(guid);
   win.setAlwaysOnTop(true, 'screen-saver');
   win.moveTop();
   extras.place();
@@ -138,13 +143,13 @@ function onWorkspaceSwitch(guid) {
   burst();
   try { win.webContents.send('workspace-switched'); } catch {}
 }
-function recover() { setTimeout(() => { extras.place(); updateVisibility(); burst(); reserve(); }, 800); }
+function recover() { setTimeout(() => { extras.place(); updateVisibility(); burst(); reserve(); macbar.apply(); }, 800); }
 
 const isDock = () => /^dock/.test(settings.mode), desktopOnly = () => /desktop$/.test(settings.mode);
 // Bar her zaman görünürken ekranın üstünde yer ayırır; adanın kapladığı yükseklik kadar (ölçekle birlikte)
 function reserve() {
   const ui = Math.max(0.8, Math.min(1.3, +settings.uiScale || 1)), h = isDock() ? 36 : (settings.offsetY ?? 10) + 42;
-  if (appbar.update(settings.reserveSpace !== false && !desktopOnly(), settings.display, h * ui)) {
+  if (appbar.update(settings.reserveSpace !== false && !desktopOnly() && !macbar.menuActive(), settings.display, h * ui)) { // macOS menü çubuğu açıkken üstte yeri o ayırır
     // Windows ada penceresini ayrılan şeridin altına iter; ada ekranın en üstüne (şeridin içine) geri konur
     [120, 400, 1000].forEach((t) => setTimeout(extras.place, t));
   }
@@ -154,6 +159,7 @@ function reserve() {
 let hideT = 0; // yapışık modda çıkış animasyonu bitince pencereyi gizleyen zamanlayıcı
 function updateVisibility() {
   if (!alive(win)) return;
+  macbar.setFullscreen(settings.hideFullscreen && fullscreen);
   const show = !(settings.hideFullscreen && fullscreen) && (!desktopOnly() || onDesktop || raised || settingsFocused());
   if (show) {
     const leaving = !!hideT; // çıkış animasyonu sürerken geri dönüldüyse giriş animasyonu yeniden oynar
@@ -236,7 +242,7 @@ const broadcast = () => [win, settingsWin].forEach((w) => alive(w) && w.webConte
 function applyPatch(p, reset) {
   const wasDnd = settings.dnd;
   settings = reset ? { ...DEFAULTS, todos: settings.todos } : { ...settings, ...pickKnown(sealSecrets(p)) };
-  save(); updateVisibility(); broadcast(); extras.apply(); regKeys(); reserve(); syncLink();
+  save(); updateVisibility(); broadcast(); extras.apply(); regKeys(); macbar.apply(); reserve(); syncLink();
   if (wasDnd && !settings.dnd) flushMissed();
 }
 
@@ -644,10 +650,12 @@ app.whenReady().then(() => {
   internet.init({ settings: () => settings, send, onResume: (f) => powerMonitor.on('resume', f) });
   kbdlight.init({ settings: () => settings, muted: () => suppressed({}) });
   extras.init({ settings: () => settings, win: () => win, send, ps, lines, ws: wsMessage, allowReq, meeting: setMeeting });
-  regKeys(); reserve();
+  macbar.init({ media: () => media, mediaCmd: (c) => ['playpause', 'next', 'prev'].includes(c) && mediaProc && mediaProc.stdin.write(c + '\n'), settings: () => settings, preload, unpacked, ps, lines, log: LOG, patch: (p) => applyPatch(p), panel: () => alive(win) && win.webContents.send('toggle', 'toggle'), openSettings,
+    onReserve: () => [120, 400, 1000].forEach((t) => setTimeout(extras.place, t)) });
+  regKeys(); macbar.apply(); reserve();
   setInterval(hitTest, 30); setInterval(reassert, 4000);
   ['display-added', 'display-removed', 'display-metrics-changed'].forEach((e) => screen.on(e, recover));
   ['resume', 'unlock-screen'].forEach((e) => powerMonitor.on(e, recover));
 });
-app.on('will-quit', () => { quitting = true; spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); render.stop(); privacy.stop(); internet.stop(); });
+app.on('will-quit', () => { quitting = true; macbar.stop(); spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); render.stop(); privacy.stop(); internet.stop(); });
 app.on('window-all-closed', (e) => e.preventDefault()); // ayar penceresi kapanınca uygulama kapanmasın

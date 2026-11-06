@@ -1,0 +1,8 @@
+    H('macOS görünümü') +
+    T('macbar', 'macOS görünümü (görev çubuğunu değiştir)', 'Açıkken Windows görev çubuğu tamamen gizlenir; üstte macOS menü çubuğu, altta Dock gelir. Uygulama kapanınca görev çubuğu geri gelir. Başlat için Win tuşu veya menü çubuğundaki sol düğme; bildirim alanı simgeleri gizlenir, ayarlara menü çubuğundaki ⚙ ile ulaşırsın.') +
+    T('macMenu', 'Üst menü çubuğu', 'Başlat düğmesi, etkin uygulamanın adı, pil, saat ve ayarlar. Ada çubuğun ortasında durur.') +
+    S('macMenuText', 'Menü çubuğu yazı rengi', [['auto', 'Otomatik (duvar kağıdına göre)'], ['white', 'Beyaz'], ['black', 'Siyah']]) +
+    G('macDockSize', 'Dock simge boyutu', 28, 72, 2) +
+    T('macNative', 'Yerel GPU çizimi (önerilen)', 'Menü çubuğu ve Dock ayrı bir C# uygulamasıyla çizilir: daha akıcı ve anında açılır. Kapatırsan eski web tabanlı görünüm kullanılır.') +
+    T('macDock', 'Alt Dock', 'Açık ve sabitlenmiş uygulamalar. Tıklayınca öne gelir, etkin olana tıklayınca küçülür; sağ tıkla sabitle, kapat.') +
+    '<small>Birden çok ekranda yalnızca seçili ekrana Dock ve menü çubuğu konur, diğer ekranlardaki görev çubuğu da gizlenir.</small>' +

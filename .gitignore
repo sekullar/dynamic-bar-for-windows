@@ -3,3 +3,6 @@ dist
 *.zip
 *.dynbar-yedek
 .claude/
+native/bin/
+native/MacShell/bin/
+native/MacShell/obj/

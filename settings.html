@@ -76,6 +76,14 @@
     T('autostart', 'Windows ile başlat', 'Oturum açınca Dynamic Bar kendiliğinden açılır.') +
     X('panelKey', 'Paneli aç/kapat kısayolu', 'Control+Alt+B') + X('testKey', 'Test bildirimi kısayolu', 'Control+Alt+N') +
     '<small>Örnek: Control+Alt+B, Alt+Shift+D. Bar tıklanmazsa bu kısayol paneli yine açar.</small>' +
+    H('macOS Dock') +
+    T('macbar', 'macOS Dock (görev çubuğunu değiştir)', 'Açıkken Windows görev çubuğu gizlenir, altta macOS Big Sur tarzı Dock gelir. Uygulama kapanınca görev çubuğu geri gelir.') +
+    G('macDockSize', 'Dock simge boyutu', 28, 72, 2) +
+    T('macDockHide', 'Dock otomatik gizlensin', 'Dock, imleç ekranın en altına inince belirir. Açıkken Dock yer ayırmaz, pencereler tam ekranı kaplar.') +
+    T('macDockPreview', 'Pencere önizlemeleri', 'Çalışan uygulamanın simgesinde bekleyince pencerelerinin küçük görüntüleri çıkar; birine tıklayınca o pencere öne gelir.') +
+    T('macIconPack', 'macOS simge paketi', 'Tanınan uygulamalar (Chrome, VS Code, Discord…) macOS tarzı simgeyle görünür; diğerleri beyaz kare plakaya oturur.') +
+    T('macNative', 'Yerel GPU çizimi (önerilen)', 'Dock ayrı bir C# uygulamasıyla çizilir: akıcı büyütme. Kapatırsan web tabanlı sürüm kullanılır.') +
+    '<small>Üst menü çubuğu arşivde. Birden çok ekranda yalnızca seçili ekrana Dock konur.</small>' +
     H('Panel sayfaları') +
     T('pageMedia', 'Medya', 'Çalan parça, kapak ve oynatma kontrolleri.') +
     T('artOnline', 'Eksik kapakları internetten bul', 'Sistem kapak vermezse parça adı iTunes araması ile sorgulanır. Kapalıyken hiçbir şey dışarı gönderilmez.') +
@@ -164,7 +172,7 @@
     '<div class="seg">' + [[260, 'Yavaş'], [160, 'Orta'], [90, 'Hızlı']].map(([v, t]) => `<label><input type="radio" name="swipe" value="${v}" data-k="swipe" data-num><span>${t}</span></label>`).join('') + '</div>';
 
   // Uzun listeyi sekmelere böl: her <h2> başlığı kendi sekmesine ait bir bölüm açar
-  const TAB = { 'Maskot': 'look', 'Görünüm': 'look', 'Konum ve davranış': 'behave', 'İki parmakla kaydırma hassasiyeti': 'behave', 'Panel sayfaları': 'pages',
+  const TAB = { 'Maskot': 'look', 'Görünüm': 'look', 'macOS görünümü': 'behave', 'macOS Dock': 'behave', 'Konum ve davranış': 'behave', 'İki parmakla kaydırma hassasiyeti': 'behave', 'Panel sayfaları': 'pages',
     'Bildirimler': 'notify', 'Yaşam ve sağlık': 'notify', 'Gizlilik': 'notify', 'Video render': 'notify', 'Klavye ışığı': 'notify',
     'Gönder (kargo)': 'apps', 'Claude Code': 'apps', 'Dış programlar': 'apps' };
   const TABS = [['look', 'Görünüm'], ['behave', 'Davranış'], ['pages', 'Panel'], ['notify', 'Bildirimler'], ['apps', 'Bağlantılar'], ['backup', 'Yedek']];

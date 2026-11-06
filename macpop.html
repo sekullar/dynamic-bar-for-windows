@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><title>Dynamic Bar paneli</title>
+<link rel="stylesheet" href="assets/mac.css">
+<link rel="stylesheet" href="assets/glass.css">
+<style>
+  html, body { margin:0; background:transparent; overflow:hidden; user-select:none; cursor:default; font-family:var(--font); color:#fff; font-size:12.5px; font-weight:500; letter-spacing:-.006em; }
+  #wrap { padding:16px; display:inline-block; }
+  #panel { will-change:transform,opacity; width:260px; opacity:0; padding:6px 0; box-sizing:border-box; text-shadow:0 1px 2px rgba(0,0,0,.25); }
+  #panel.wifi { width:320px; padding:10px 0; }
+  svg { fill:currentColor; flex:none; }
+  .mi { display:flex; align-items:center; gap:10px; margin:0 6px; padding:6px 12px; border-radius:9px; transition:background .12s; }
+  .mi:hover { background:rgba(255,255,255,.2); box-shadow:inset 0 0 0 .5px rgba(255,255,255,.25); }
+  .mi:active { background:rgba(255,255,255,.3); transform:scale(.985); }
+  .mi.dis { opacity:.38; pointer-events:none; }
+  .mi .ck { width:12px; flex:none; font-size:12px; opacity:.9; } .mi .lb { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } .mi .ac { opacity:.55; font-size:12px; }
+  .sep { height:1px; margin:5px 14px; background:rgba(255,255,255,.2); }
+  .hd { padding:4px 18px 6px; font-size:12px; opacity:.6; font-weight:600; }
+  .net .lb small { display:block; opacity:.6; font-size:11px; font-weight:500; margin-top:1px; }
+  .net.cur .ck { color:#4da3ff; }
+  .empty { padding:14px 18px; opacity:.6; }
+
+  /* ---- Denetim Merkezi: macOS Tahoe düzeni, her karo kendi camı ---- */
+  #cc { width:276px; display:none; text-shadow:0 1px 2px rgba(0,0,0,.22); }
+  #cc .g { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .tile { will-change:transform,opacity; position:relative; box-sizing:border-box; padding:10px; opacity:0; }
+  .tile:active { transform:scale(.97); transition:transform .12s; }
+  .tile b { display:block; font-weight:600; font-size:13px; } .tile small { display:block; opacity:.7; font-size:11.5px; margin-top:1px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .circ { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none; background:rgba(255,255,255,.2); transition:background .25s, color .25s, transform .4s var(--sp, ease); }
+  .circ:active { transform:scale(.88); }
+  .circ.on { background:#fff; color:#0a84ff; text-shadow:none; box-shadow:0 0 14px rgba(255,255,255,.55); }
+  #net { height:124px; display:flex; flex-direction:column; justify-content:space-between; }
+  #net .row { display:flex; align-items:center; gap:9px; } #net .circs { display:flex; gap:12px; }
+  #med { height:124px; display:flex; flex-direction:column; justify-content:space-between; }
+  #med .top { display:flex; gap:9px; align-items:center; min-width:0; } #med .art { width:40px; height:40px; border-radius:10px; background:rgba(255,255,255,.18) center/cover; flex:none; }
+  #med .tx { min-width:0; } #med .ctl { display:flex; justify-content:space-around; align-items:center; }
+  #med .ctl svg { cursor:default; transition:transform .3s var(--sp, ease); } #med .ctl svg:active { transform:scale(.8); }
+  #foc { height:52px; display:flex; align-items:center; gap:9px; padding:10px 12px; }
+  #foc.on .circ { background:#fff; color:#6a5af9; }
+  .sqs { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .sq { height:52px; display:flex; align-items:center; justify-content:center; padding:0; }
+  .sq.on { color:#0a84ff; }
+  .sl { grid-column:1 / 3; height:58px; padding:8px 12px 9px; }
+  .sl b { margin-bottom:4px; }
+  .track { position:relative; height:22px; }
+  .track svg { position:absolute; left:8px; top:50%; transform:translateY(-50%); pointer-events:none; color:#4a4a52; z-index:2; fill:currentColor; }
+  input[type=range] { -webkit-appearance:none; appearance:none; position:absolute; inset:0; width:100%; height:22px; border-radius:11px; margin:0; outline:none;
+    background:linear-gradient(to right,rgba(255,255,255,.96) var(--v,50%),rgba(255,255,255,.3) var(--v,50%)); box-shadow:inset 0 1px 2px rgba(0,0,0,.2); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,.3); transition:transform .3s var(--sp, ease); }
+  input[type=range]:active::-webkit-slider-thumb { transform:scale(1.2); }
+  .na { opacity:.4; pointer-events:none; }
+  .bot { grid-column:1 / 3; display:flex; justify-content:space-between; padding:2px 4px 0; }
+  .bot .tile { width:46px; height:46px; padding:0; display:flex; align-items:center; justify-content:center; }
+  .cap { grid-column:1 / 3; text-align:center; font-size:11.5px; opacity:.75; padding-top:2px; opacity:0; text-shadow:0 1px 3px rgba(0,0,0,.4); }
+  .cap:hover { opacity:1 !important; text-decoration:underline; }
+</style></head><body>
+<div id="wrap">
+  <div id="panel"></div>
+  <div id="cc"><div class="g">
+    <div class="tile lite" id="net"><div class="row" id="wifi"><div class="circ on" id="wifiC"><svg width="20" height="16" viewBox="0 0 18 14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M1.6 5.2a10.6 10.6 0 0 1 14.8 0"/><path d="M4.2 7.9a7 7 0 0 1 9.6 0"/><path d="M6.7 10.4a3.5 3.5 0 0 1 4.6 0"/><circle cx="9" cy="12.4" r=".9" fill="currentColor" stroke="none"/></svg></div><div><b>Wi‑Fi</b><small id="wifis">…</small></div></div>
+      <div class="circs"><div class="circ" id="bt"><svg width="14" height="20" viewBox="0 0 12 18"><path d="M1 4.5 9.5 12 5.8 15.5V2.5L9.5 6 1 13.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
+      <div class="circ" id="air" title="Uçak modu"><svg width="20" height="20" viewBox="0 0 20 20"><path d="M18.5 9.2 11.6 5.3V2.4a1.6 1.6 0 0 0-3.2 0v2.9L1.5 9.2v1.7l6.9-1.7v3.6l-1.7 1.4v1.3l3.3-.8 3.3.8v-1.3l-1.7-1.4V9.2l6.9 1.7z"/></svg></div></div></div>
+    <div class="tile lite" id="med"><div class="top"><div class="art" id="art"></div><div class="tx"><b id="mt">Çalan yok</b><small id="ma"></small></div></div>
+      <div class="ctl"><svg id="prev" width="22" height="16" viewBox="0 0 22 16"><path d="M2 1v14M20 1.4v13.2L8.6 8z"/></svg><svg id="pp" width="20" height="20" viewBox="0 0 20 20"><path d="M4 2.5v15l13-7.5z"/></svg><svg id="next" width="22" height="16" viewBox="0 0 22 16"><path d="M20 1v14M2 1.4v13.2L13.4 8z"/></svg></div></div>
+    <div class="tile lite" id="foc"><div class="circ" id="focC"><svg width="18" height="18" viewBox="0 0 16 16"><path d="M13.5 9.6A6 6 0 0 1 6.4 2.5a6 6 0 1 0 7.1 7.1z"/></svg></div><div><b>Odak</b><small id="dnds">Kapalı</small></div></div>
+    <div class="sqs"><div class="tile lite sq" id="nl" title="Gece ışığı"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="4.2"/><path d="M11 1.5v3M11 17.5v3M1.5 11h3M17.5 11h3M4.3 4.3l2.1 2.1M15.6 15.6l2.1 2.1M17.7 4.3l-2.1 2.1M6.4 15.6l-2.1 2.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+      <div class="tile lite sq" id="cast" title="Ekranı yansıt"><svg width="22" height="20" viewBox="0 0 22 20"><rect x="1.2" y="2.5" width="19.6" height="12" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M7 18h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div></div>
+    <div class="tile lite sl" id="bri"><b>Ekran</b><div class="track"><svg width="14" height="14" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3"/><path d="M8 0v2.4M8 13.6V16M0 8h2.4M13.6 8H16M2.3 2.3 4 4M12 12l1.7 1.7M13.7 2.3 12 4M4 12l-1.7 1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><input type="range" id="bri-r" min="0" max="100"></div></div>
+    <div class="tile lite sl" id="vol"><b>Ses</b><div class="track"><svg id="spk" width="16" height="14" viewBox="0 0 18 16"><path d="M1 5.5h3.2L8.5 1.8v12.4L4.2 10.5H1z"/><path d="M11.2 5.2a4 4 0 0 1 0 5.6M13.4 3a7 7 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input type="range" id="vol-r" min="0" max="100"></div></div>
+    <div class="bot">
+      <div class="tile lite" id="dark" title="Koyu / açık mod"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="8.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 2.6a8.4 8.4 0 0 1 0 16.8z"/></svg></div>
+      <div class="tile lite" id="calc" title="Hesap makinesi"><svg width="20" height="22" viewBox="0 0 20 22"><rect x="1.5" y="1.5" width="17" height="19" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="4.5" y="4.5" width="11" height="4" rx="1"/><circle cx="6" cy="12.5" r="1.2"/><circle cx="10" cy="12.5" r="1.2"/><circle cx="14" cy="12.5" r="1.2"/><circle cx="6" cy="16.5" r="1.2"/><circle cx="10" cy="16.5" r="1.2"/><circle cx="14" cy="16.5" r="1.2"/></svg></div>
+      <div class="tile lite" id="timer" title="Saat"><svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11.5" r="8.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 6.6v5.2l3.2 2M8.5 1.8h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+      <div class="tile lite" id="shot" title="Ekran görüntüsü"><svg width="22" height="20" viewBox="0 0 22 20"><path d="M7.4 2.4h7.2l1.5 2.4h3.1a1.8 1.8 0 0 1 1.8 1.8v9.6a1.8 1.8 0 0 1-1.8 1.8H2.8A1.8 1.8 0 0 1 1 16.2V6.6a1.8 1.8 0 0 1 1.8-1.8h3.1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="11" cy="11" r="3.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></div>
+    </div>
+    <div class="cap" id="dbs">Dynamic Bar ayarları</div>
+  </div></div>
+</div>
+<script src="assets/glass.js"></script>
+<script>
+const PAD = 16, $ = (s, r = document) => r.querySelector(s), panel = $('#panel'), cc = $('#cc');
+const SP = Glass.spring(.4); document.documentElement.style.setProperty('--sp', SP);
+Glass.attach(panel, { radius: 22 });
+const content = document.createElement('div'); panel.append(content);
+let view = '', out = false, ccState = null, ccBuilt = false, media = null, mediaT = 0;
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const bars = (s) => { const n = s >= 75 ? 4 : s >= 50 ? 3 : s >= 25 ? 2 : 1; return `<svg width="18" height="14" viewBox="0 0 18 14">${[0, 1, 2, 3].map((i) => `<rect x="${i * 4.6}" y="${10 - i * 3}" width="3.2" height="${4 + i * 3}" rx="1" opacity="${i < n ? 1 : .28}"/>`).join('')}</svg>`; };
+
+function renderMenu(d) {
+  content.innerHTML = (d.items || []).map((it) => it.sep ? '<div class="sep"></div>' : it.hd ? `<div class="hd">${esc(it.label)}</div>` :
+    `<div class="mi${it.disabled ? ' dis' : ''}" data-stagger data-id="${esc(it.id || '')}"><span class="ck">${it.checked ? '✓' : ''}</span><span class="lb">${esc(it.label)}</span><span class="ac">${esc(it.accel || '')}</span></div>`).join('');
+  content.querySelectorAll('.mi').forEach((n) => n.onclick = () => dynbar.send('macpop:act', n.dataset.id));
+}
+function renderWifi(d) {
+  const nets = d.nets || [];
+  content.innerHTML = `<div class="hd">Wi‑Fi${d.current ? ' · ' + esc(d.current) : ''}</div>` + (d.loading && !nets.length ? '<div class="empty">Ağlar aranıyor…</div>' :
+    nets.length ? nets.map((n) => `<div class="mi net${n.current ? ' cur' : ''}" data-stagger data-id="${esc(n.id)}"><span class="ck">${n.current ? '✓' : ''}</span><span class="lb">${esc(n.ssid)}<small>${n.current ? 'Bağlı' : n.known ? 'Kayıtlı ağ' : n.secured ? 'Güvenli' : 'Açık ağ'}</small></span>${n.secured ? '<svg width="10" height="12" viewBox="0 0 10 12" opacity=".7"><path d="M5 0a3 3 0 0 0-3 3v2H1a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H8V3a3 3 0 0 0-3-3zm0 1.6A1.4 1.4 0 0 1 6.4 3v2H3.6V3A1.4 1.4 0 0 1 5 1.6z"/></svg>' : ''}${bars(n.signal)}</div>`).join('')
+      : '<div class="empty">Ağ bulunamadı</div>') +
+    '<div class="sep"></div><div class="mi" data-stagger data-id="settings"><span class="ck"></span><span class="lb">Wi‑Fi ayarlarını aç…</span></div>';
+  content.querySelectorAll('.mi').forEach((n) => n.onclick = () => dynbar.send('macpop:act', n.dataset.id));
+}
+
+// ---- Denetim Merkezi ----
+const tiles = () => [...cc.querySelectorAll('.tile'), $('#dbs')];
+const fill = (el) => el.style.setProperty('--v', el.value + '%');
+let dragging = false;
+function buildCC() {
+  if (ccBuilt) return; ccBuilt = true;
+  cc.querySelectorAll('.tile').forEach((t) => Glass.attach(t, { radius: t.classList.contains('sl') || t.id === 'net' || t.id === 'med' ? 22 : t.closest('.bot') ? 23 : 23, flat: true, blur: 12 }));
+  cc.querySelectorAll('.bot .tile').forEach((t) => { t.style.borderRadius = '50%'; t._glass.r = 23; });
+  const vr = $('#vol-r'), br = $('#bri-r'), send = dynbar.send;
+  vr.oninput = () => { dragging = true; fill(vr); send('maccc:vol', +vr.value); }; vr.onchange = () => { dragging = false; };
+  br.oninput = () => { dragging = true; fill(br); }; br.onchange = () => { dragging = false; send('maccc:bri', +br.value); };
+  $('#spk').parentElement.onmousedown = (e) => { if (e.target === $('#spk') || e.target.closest('#spk')) send('maccc:mute'); };
+  $('#wifi').onclick = () => send('macpop:switch', 'wifi');
+  $('#bt').onclick = () => send('maccc:open', 'ms-settings:bluetooth');
+  $('#air').onclick = () => send('maccc:open', 'ms-settings:network-airplanemode');
+  $('#foc').onclick = () => send('maccc:dnd');
+  $('#nl').onclick = () => send('maccc:open', 'ms-settings:nightlight');
+  $('#cast').onclick = () => send('maccc:cast');
+  $('#dark').onclick = () => send('maccc:dark');
+  $('#calc').onclick = () => send('maccc:launch', 'calc');
+  $('#timer').onclick = () => send('maccc:launch', 'clock');
+  $('#shot').onclick = () => send('maccc:launch', 'shot');
+  $('#dbs').onclick = () => send('maccc:settings');
+  $('#prev').onclick = () => send('maccc:media', 'prev'); $('#next').onclick = () => send('maccc:media', 'next'); $('#pp').onclick = () => { send('maccc:media', 'playpause'); setTimeout(pollMedia, 400); };
+  [$('#prev'), $('#next')].forEach((x) => x.setAttribute('fill', 'currentColor'));
+}
+function ccApply(s) {
+  if (!s || !ccBuilt) return; ccState = s;
+  const vr = $('#vol-r'), br = $('#bri-r');
+  if (!dragging) { vr.value = s.muted ? 0 : s.vol; fill(vr); }
+  if (s.bri == null) $('#bri').classList.add('na'); else { $('#bri').classList.remove('na'); if (!dragging) { br.value = s.bri; fill(br); } }
+  $('#foc').classList.toggle('on', !!s.dnd); $('#dnds').textContent = s.dnd ? 'Rahatsız Etme' : 'Kapalı';
+  $('#dark').classList.toggle('on', !!s.dark);
+  const on = navigator.onLine; $('#wifis').textContent = on ? 'Bağlı' : 'Çevrimdışı'; $('#wifiC').classList.toggle('on', on);
+}
+async function pollMedia() {
+  if (view !== 'cc') return;
+  try { media = await dynbar.invoke('maccc:getmedia'); } catch { media = null; }
+  const m = media || {};
+  $('#mt').textContent = m.title || 'Çalan bir şey yok'; $('#ma').textContent = m.artist || '';
+  $('#art').style.backgroundImage = m.art ? `url(${m.art})` : '';
+  $('#pp').innerHTML = m.playing ? '<path d="M4 2.5h4v15H4zM12 2.5h4v15h-4z"/>' : '<path d="M4 2.5v15l13-7.5z"/>';
+  clearTimeout(mediaT); mediaT = setTimeout(pollMedia, 1500);
+}
+dynbar.on('maccc:state', (s) => ccApply(s));
+
+function measure() {
+  const el = view === 'cc' ? cc : panel, b = el.getBoundingClientRect();
+  dynbar.send('macpop:size', { w: Math.ceil(b.width) + PAD * 2, h: Math.ceil(b.height) + PAD * 2 });
+}
+dynbar.on('macpop:show', (m) => {
+  out = false; view = m.view; panel.getAnimations().forEach((a) => a.cancel());
+  const isCC = view === 'cc'; cc.style.display = isCC ? 'block' : 'none'; panel.style.display = isCC ? 'none' : 'block';
+  if (isCC) {
+    buildCC(); tiles().forEach((t) => { t.getAnimations().forEach((a) => a.cancel()); t.style.opacity = 0; }); ccApply(m.data && m.data.cc || ccState); pollMedia();
+  } else {
+    panel.className = 'glass ' + view; panel.style.opacity = 0; clearTimeout(mediaT);
+    if (view === 'wifi') renderWifi(m.data || {}); else renderMenu(m.data || {});
+  }
+  requestAnimationFrame(() => { Glass.relayout(); measure(); });
+});
+dynbar.on('macpop:data', (m) => { if (m.view !== view) return; if (view === 'wifi') renderWifi(m.data || {}); requestAnimationFrame(() => { Glass.relayout(); measure(); }); });
+dynbar.on('macpop:play', (m) => {
+  Glass.setBackdrop(m.bd);
+  requestAnimationFrame(() => {
+    if (view === 'cc') {
+      // her karo tetikleyen simgeden ayrı ayrı, sırayla sıvı gibi açılır
+      tiles().forEach((t, i) => {
+        const r = t.getBoundingClientRect(); t.style.opacity = 1;
+        Glass.morphIn(t, m.ax - r.left, m.ay - r.top, { radius: t._glass ? t._glass.r : 20, duration: 320 + i * 6, bounce: m.swap ? .1 : .2 });
+        t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, delay: i * 5, fill: 'backwards' });
+      });
+    } else { panel.style.opacity = 1; Glass.morphIn(panel, m.ax - PAD, m.ay - PAD, { radius: 22, bounce: m.swap ? .1 : .2 }); }
+  });
+});
+dynbar.on('macpop:out', (m) => {
+  if (out) return; out = true; clearTimeout(mediaT);
+  if (view === 'cc') {
+    const ts = tiles(); let n = ts.length;
+    ts.forEach((t) => { const r = t.getBoundingClientRect(); Glass.morphOut(t, m.ax - r.left, m.ay - r.top, { radius: t._glass ? t._glass.r : 20 }).finished.then(() => { if (--n <= 0) dynbar.send('macpop:done'); }, () => { if (--n <= 0) dynbar.send('macpop:done'); }); });
+  } else Glass.morphOut(panel, m.ax - PAD, m.ay - PAD, { radius: 22 }).finished.then(() => dynbar.send('macpop:done'), () => dynbar.send('macpop:done'));
+});
+dynbar.send('macpop:ready');
+</script></body></html>

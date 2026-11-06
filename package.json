@@ -42,6 +42,11 @@
       "privacy.js",
       "internet.js",
       "kbdlight.js",
+      "macbar.js",
+      "winlist.js",
+      "macdock.html",
+      "macmenu.html",
+      "macpop.html",
       "parcel-ui.js",
       "parcel.html",
       "destinations.js",
@@ -52,6 +57,7 @@
       "index.html",
       "settings.html",
       "assets/**",
+      "native/bin/**",
       "scripts/**",
       "integrations/**",
       "package.json"
@@ -59,6 +65,7 @@
     "asarUnpack": [
       "scripts/**",
       "integrations/**",
+      "native/bin/**",
       "cli.js"
     ],
     "win": {
