@@ -29,7 +29,7 @@ const DEFAULTS = {
   // konum ve davranış (mode: float | dock | desktop (yüzen, sadece masaüstünde) | dock-desktop (yapışık, sadece masaüstünde))
   // reserveSpace: bar her zaman görünürken ekranın üstünde pencerelere yer bırakmaz (görev çubuğu gibi); sadece masaüstü modlarında uygulanmaz
   // macbar: Windows görev çubuğunu gizleyip yerine macOS menü çubuğu (üst) ve Dock (alt) koyar; dockPins: Dock'a sabitlenen exe yolları (satır satır)
-  macbar: false, macNative: true, macIconPack: true, macDockHide: false, macDockPreview: true, macDockAnim: 'lively', macMenu: true, macDock: true, macDockSize: 40, macMenuText: 'auto', dockPins: '',
+  macbar: false, macNative: true, macIconPack: true, macDockHide: false, macDockPreview: true, macDockAnim: 'lively', macMenu: true, macMenuHide: false, macDock: true, macDockSize: 40, macMenuText: 'auto', dockPins: '',
   mode: 'float', reserveSpace: true, display: 0, hideFullscreen: true, gameMode: true, autostart: false,
   openOn: 'click', closeDelay: 3.5, sleepAfter: 20, ttlScale: 1, startupToast: true, swipe: 160,
   panelKey: 'Control+Alt+B', testKey: 'Control+Alt+N',

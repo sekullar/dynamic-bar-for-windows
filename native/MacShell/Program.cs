@@ -9,7 +9,7 @@ static class Program
     static readonly ConcurrentQueue<JsonElement> Queue = new();
     static readonly AutoResetEvent Wake = new(false);
     static readonly object OutLock = new();
-    static MenuWindow menu; static DockWindow dock;
+    static MenuWindow menu; static DockWindow dock; static PopWindow pop; static IntPtr tgt; static bool darkNow;
     static bool running = true;
     static int wallHash;
     static StreamWriter stdout;
@@ -36,15 +36,36 @@ static class Program
         {
             while (N.PeekMessage(out var msg, IntPtr.Zero, 0, 0, 1)) { if (msg.message == 0x12) running = false; N.TranslateMessage(ref msg); N.DispatchMessage(ref msg); }
             while (Queue.TryDequeue(out var cmd)) { try { Handle(cmd); } catch (Exception e) { Emit("native:error", e.Message); } }
-            dock?.Poll(); menu?.Poll();
+            dock?.Poll(); menu?.Poll(); pop?.Poll(() => menu != null && menu.OverBar());
             if ((DateTime.Now - last).TotalSeconds >= 1) { last = DateTime.Now; if (menu != null) menu.Dirty = true; }
             bool any = false;
-            if (menu != null && (menu.Dirty || menu.Animating)) { menu.Frame(); any = true; }
-            if (dock != null && (dock.Dirty || dock.Animating)) { dock.Frame(); any = true; }
-            if (!any) N.MsgWaitForMultipleObjects(1, new[] { evt }, false, (dock != null && dock.AutoHide) ? 40u : 250u, 0x4FF);
+            if (menu != null && (menu.Dirty || menu.Animating)) { Safe(menu.Frame); any = true; }
+            if (dock != null && (dock.Dirty || dock.Animating)) { Safe(dock.Frame); any = true; }
+            if (pop != null && pop.IsOpen && (pop.Dirty || pop.Animating)) { Safe(pop.Frame); any = true; }
+            if (!any) N.MsgWaitForMultipleObjects(1, new[] { evt }, false, ((dock != null && dock.AutoHide) || (menu != null && menu.AutoHide) || (pop != null && pop.IsOpen)) ? 40u : 250u, 0x4FF);
         }
-        menu?.Dispose(); dock?.Dispose();
+        pop?.Dispose(); menu?.Dispose(); dock?.Dispose();
     }
+
+    static void EnsurePop()
+    {
+        pop ??= new PopWindow(0, 0, 16, 16)
+        {
+            Emit = (c, x) => { if (c == "macpop:nact" && x is string s && s.StartsWith("m:")) HMenu.Invoke(s); else Emit(c, x); },
+            OnClosed = () => { menu?.ClearOpen(); Emit("macpop:nclosed", null); }
+        };
+    }
+    static void OpenHmPop(int idx, float x, float w, string label)
+    {
+        if (menu == null || tgt == IntPtr.Zero) return;
+        string key = "hm" + idx + label;
+        if (pop != null && pop.IsOpen && pop.Key == key) { pop.Close(); return; }
+        var li = HMenu.Items(tgt, idx); if (li.Count == 0) { menu.ClearOpen(); return; }
+        EnsurePop(); float sc = menu.Scale; int lx = menu.PxX + (int)((x - 4) * sc), ty = menu.PxY + (int)(26 * sc);
+        menu.PopOpen = true; pop.Open(li, key, darkNow, lx, ty, menu.PxX + menu.PxW, sc);
+    }
+
+    static void Safe(Action a) { try { a(); } catch (Exception e) { Emit("native:error", "frame: " + e.GetType().Name + ": " + e.Message); Thread.Sleep(50); } }
 
     static void ReadStdin()
     {
@@ -70,6 +91,29 @@ static class Program
     {
         string w = Str(c, "w") ?? "all", ch = Str(c, "ch"); c.TryGetProperty("d", out var d);
         if (ch == "force-hover") { dock?.ForceHover(Num(d, "x"), (int)Num(d, "i")); return; }
+        if (ch == "prefs" && w == "menu")
+        {
+            string an = Str(d, "anim") ?? "lively"; PopWindow.Dur = an == "soft" ? 300f : an == "off" ? 1f : 130f;
+            if (menu != null) { menu.IslandHalf = Num(d, "island", 104); menu.AutoHide = Bool(d, "menuhide"); menu.Ease = an == "soft" ? .11f : an == "off" ? 1f : .25f; menu.Dirty = true; }
+            return;
+        }
+        if (ch == "macmenu:target")
+        {
+            if (long.TryParse(Str(d, "hwnd"), out var th)) tgt = new IntPtr(th); darkNow = Bool(d, "dark");
+            if (menu != null) { menu.Hm = HMenu.Top(tgt); menu.OpenHm = OpenHmPop; menu.Dirty = true; }
+            return;
+        }
+        if (ch == "pop:close") { if (pop != null && pop.IsOpen) pop.Close(); else Emit("macpop:nclosed", null); return; }
+        if (ch == "pop:open")
+        {
+            if (menu == null) return;
+            EnsurePop(); darkNow = Bool(d, "dark");
+            var li = new List<PopItem>();
+            foreach (var e in d.GetProperty("items").EnumerateArray()) li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis") });
+            float sc = menu.Scale; int lx = menu.PxX + (int)((Num(d, "x") - 4) * sc), ty = menu.PxY + (int)(26 * sc);
+            menu.PopOpen = true; pop.Open(li, Str(d, "key") ?? "", darkNow, lx, ty, menu.PxX + menu.PxW, sc);
+            return;
+        }
         if (ch == "prefs") { if (dock != null) { dock.AutoHide = Bool(d, "autohide"); dock.PreviewOn = !d.TryGetProperty("previews", out var pv) || pv.ValueKind != JsonValueKind.False; dock.SetAnim(Str(d, "anim") ?? "lively"); dock.Dirty = true; } return; }
         if (ch == "quit") { running = false; return; }
         if (ch == "bounds")
@@ -83,7 +127,7 @@ static class Program
             }
             else if (w == "dock")
             {
-                if (dock == null) { dock = new DockWindow(x, y, pw, ph) { Emit = Emit }; dock.SetBounds(x, y, pw, ph, sc); Emit("macdock:ready", null); }
+                if (dock == null) { dock = new DockWindow(x, y, pw, ph) { Emit = Emit }; dock.SetBounds(x, y, pw, ph, sc); if (WallData.Bmp != null) dock.SetWall(WallData.Bmp, wallHash.ToString(), WallData.Iw, WallData.Ih, WallData.Sw, WallData.Sh, 0, y / sc); Emit("macdock:ready", null); }
                 else dock.SetBounds(x, y, pw, ph, sc);
                 Report();
             }
@@ -122,15 +166,18 @@ static class Program
                 }
                 break;
             case "macdock:bd":
-                if (dock != null)
                 {
-                    string url = Str(d, "url"); int h = url == null ? 0 : url.GetHashCode();
-                    if (h != wallHash || true)
+                    string url = Str(d, "url"); int h = url == null ? 0 : url.GetHashCode(); bool same = h == wallHash;
+                    if (same) { dock?.UpdateWallPos(Num(d, "ox"), Num(d, "oy"), Num(d, "sw"), Num(d, "sh")); }
+                    else
                     {
-                        bool same = h == wallHash; wallHash = h;
-                        var bmp = same ? null : Glass.LoadDataUrl(url);
-                        if (same) { dock.UpdateWallPos(Num(d, "ox"), Num(d, "oy"), Num(d, "sw"), Num(d, "sh")); }
-                        else if (bmp != null) dock.SetWall(bmp, h.ToString(), Num(d, "iw", bmp.PixelSize.Width), Num(d, "ih", bmp.PixelSize.Height), Num(d, "sw"), Num(d, "sh"), Num(d, "ox"), Num(d, "oy"));
+                        var bmp = Glass.LoadDataUrl(url);
+                        if (bmp != null)
+                        {
+                            wallHash = h; var old = WallData.Bmp; WallData.Bmp = bmp; WallData.Iw = Num(d, "iw", bmp.PixelSize.Width); WallData.Ih = Num(d, "ih", bmp.PixelSize.Height); WallData.Sw = Num(d, "sw"); WallData.Sh = Num(d, "sh");
+                            dock?.SetWall(bmp, h.ToString(), WallData.Iw, WallData.Ih, WallData.Sw, WallData.Sh, Num(d, "ox"), Num(d, "oy"));
+                            old?.Dispose();
+                        }
                     }
                 }
                 break;

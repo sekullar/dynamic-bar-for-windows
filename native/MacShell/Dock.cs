@@ -23,10 +23,10 @@ class DockWindow : Surface
     public List<DockItem> Items = new();
     public float Size = 40; public Action<string, object> Emit;
     public bool AutoHide, PreviewOn = true;
-    float peak = .40f, springK = .13f, springD = .78f, spread = 1.35f, tipK = .28f;
+    float peak = .40f, springK = .13f, springD = .78f, spread = 1.35f, tipK = .28f, prevK = .3f;
     public void SetAnim(string a)
     {
-        switch (a) { case "soft": peak = .26f; springK = .075f; springD = .88f; spread = 1.6f; tipK = .16f; break; case "off": peak = 0f; springK = .2f; springD = .7f; spread = 1.35f; tipK = .28f; break; default: peak = .40f; springK = .13f; springD = .78f; spread = 1.35f; tipK = .28f; break; }
+        switch (a) { case "soft": peak = .26f; springK = .075f; springD = .88f; spread = 1.6f; tipK = .14f; prevK = .14f; break; case "off": peak = 0f; springK = .2f; springD = .7f; spread = 1.35f; tipK = .5f; prevK = .6f; break; default: peak = .40f; springK = .13f; springD = .78f; spread = 1.35f; tipK = .28f; prevK = .3f; break; }
         Dirty = true;
     }
     ID2D1Bitmap1 wall; string wallSig; float wallIw, wallIh, bdSw, bdSh, bdOx, bdOy;
@@ -75,7 +75,7 @@ class DockWindow : Surface
     }
     public void SetWall(ID2D1Bitmap1 bmp, string sig, float iw, float ih, float sw, float sh, float ox, float oy)
     {
-        wall?.Dispose(); wall = bmp; wallSig = sig; wallIw = iw; wallIh = ih; bdSw = sw; bdSh = sh; bdOx = ox; bdOy = oy; glassSig = null; Dirty = true;
+        wall = bmp; wallSig = sig; wallIw = iw; wallIh = ih; bdSw = sw; bdSh = sh; bdOx = ox; bdOy = oy; glassSig = null; Dirty = true;
     }
     public void UpdateWallPos(float ox, float oy, float sw, float sh) { if (ox != bdOx || oy != bdOy || sw != bdSw || sh != bdSh) { bdOx = ox; bdOy = oy; bdSw = sw; bdSh = sh; glassSig = null; Dirty = true; } }
     protected override void OnResize() { glassSig = null; }
@@ -120,7 +120,7 @@ class DockWindow : Surface
             shown += (t - shown) * .22f; if (MathF.Abs(t - shown) < .004f) shown = t; else busy = true;
         }
         else if (shown != 1f) { shown = 1f; }
-        float pt = prevIdx >= 0 ? 1 : 0; float pp = prevA; prevA += (pt - prevA) * .3f; if (MathF.Abs(pt - prevA) < .01f) prevA = pt; if (pp != prevA) busy = true;
+        float pt = prevIdx >= 0 ? 1 : 0; float pp = prevA; prevA += (pt - prevA) * prevK; if (MathF.Abs(pt - prevA) < .01f) prevA = pt; if (pp != prevA) busy = true;
         Tb = Matrix3x2.CreateTranslation(0, (1 - shown) * HideOff);
     }
     int PosOf(int i)
@@ -339,6 +339,7 @@ class DockWindow : Surface
     public void Poll()
     {
         var c = CursorDip(); var now = DateTime.UtcNow;
+        if (dragIdx >= 0 && (N.GetAsyncKeyState(0x01) & 0x8000) == 0) { N.ReleaseCapture(); dragging = false; dragIdx = -1; dragTarget = -1; pressIdx = -1; Dirty = true; } // fare bırakma mesajı kaçtıysa takılı kalmasın
         if (AutoHide)
         {
             bool want = hov || dragging || prevIdx >= 0 || CursorAtEdge(); if (want) leaveAt = now.AddMilliseconds(450);

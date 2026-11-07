@@ -31,7 +31,7 @@ açıp yazı yazar, iş bitince haber verir, izin isterken karar vermeni bardan 
 - Medya kontrolü, saat, takvim, pomodoro, kronometre, yapılacaklar, hava, döviz, dünya saatleri, pano geçmişi ve daha fazlası.
 - Yerel API (`127.0.0.1:47800`): her program bildirim gönderebilir; port ve anahtar `~/.dynbar-ecosystem/dynamic-bar.json` dosyasından otomatik bulunur. Ayrıntı: [API.md](API.md).
 
-**macOS görünümü (arşivlendi):** Menü çubuğu + Dock (`macbar.js`, `macmenu.html`, `macdock.html`, `macpop.html`, `native/`) kodu projede duruyor ama kapalı; ayarlarda görünmez. Yeniden açmak için `macbar.js` içinde `ARCHIVED = false` yapıp `docs/archive/mac-settings-block.txt` bloğunu `settings.html`'e geri koy.
+**macOS görünümü:** Üstte menü çubuğu (Windows logosu, etkin uygulamanın adı, klasik uygulamaların menüleri üstteki panelde açılır, Wi‑Fi, pil, saat, sistem tepsisi düğmesi; ayarlardan otomatik gizlenebilir), altta Big Sur tarzı Dock (büyütme, sürükleyerek sıralama, pencere önizlemesi, otomatik gizleme). Yerel C# kabuğu `native/MacShell` altında; `dotnet publish -c Release -r win-x64 --self-contained false -o native/bin` ile derlenir (.NET 9 gerekir), release iş akışı bunu kendisi yapar. Dock simgeleri [WhiteSur](https://github.com/vinceliuice/WhiteSur-icon-theme) simge temasından (GPL-3.0) türetilmiştir; Inter yazı tipi OFL lisanslıdır.
 
 **Spotlight ve kargo**
 - **Spotlight araması:** Spotlight for Windows'ta "Dynamic Bar ile entegre ol" açıkken kısayol (Alt+Space) aramayı adada açar. Spotlight çalışıyor olmalı; yoksa kendi çubuğu açılır. `dynbar search` ile de açılır.

@@ -29,7 +29,7 @@ const alive = (w) => w && !w.isDestroyed();
 
 // ---------- Yerel (C# / GPU) kabuk: menü çubuğu ve Dock ----------
 // native/MacShell.exe aynı IPC kanallarını konuşur; menuWin/dockWin yerine bu sahte pencereler kullanılır.
-let nat = null, natHwnd = { menu: 0, dock: 0 };
+let nat = null, natHwnd = { menu: 0, dock: 0 }, nPopKey = '';
 const nativeExe = () => { for (const p of [path.join(__dirname, 'native', 'bin', 'MacShell.exe'), path.join(__dirname, 'native', 'MacShell', 'bin', 'Release', 'net9.0-windows10.0.19041.0', 'MacShell.exe')]) { const q = ctx.unpacked(p); if (fs.existsSync(q)) return q; } return null; };
 const useNative = () => ctx.settings().macNative !== false && !!nativeExe();
 function natSend(w, ch, d) { if (nat && nat.stdin.writable) { try { nat.stdin.write(JSON.stringify({ w, ch, d }) + '\n'); } catch {} } }
@@ -43,7 +43,8 @@ function natStart() {
     else if (j.ch === 'native:error') ctx.log('native', j.d);
     else if (typeof j.ch === 'string' && j.ch.startsWith('mac')) ipcMain.emit(j.ch, { sender: null }, j.d);
   });
-  nat.on('exit', () => { nat = null; });
+  const me = nat;
+  me.on('exit', () => { if (nat !== me) return; nat = null; nPopKey = ''; if (enabled()) { menuWin = dockWin = null; setTimeout(() => { if (enabled() && !nat) { sync(); pushPrefs(); } }, 800); } }); // yerel süreç çökerse yeniden başlat
 }
 class NatWin {
   constructor(role, rect) { this.role = role; this.alive = true; this.vis = true; natStart(); this.setBounds(rect); this.webContents = { send: (ch, d) => natSend(role, ch, d), isLoading: () => false }; }
@@ -70,7 +71,8 @@ function pretty(exe) {
 }
 const display = () => { const all = screen.getAllDisplays(), s = ctx.settings(); return all[s.display] || screen.getPrimaryDisplay(); };
 const pins = () => String(ctx.settings().dockPins || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
-const MENU_ARCHIVED = true; // üst menü çubuğu arşivde (kod duruyor); yalnızca Dock açılabilir
+const MENU_ARCHIVED = false;
+const menuHide = () => ctx.settings().macMenuHide === true;
 const autoHide = () => ctx.settings().macDockHide === true;
 const wantMenu = () => !MENU_ARCHIVED && ctx.settings().macMenu !== false, wantDock = () => ctx.settings().macDock !== false;
 const enabled = () => process.platform === 'win32' && ctx && ctx.settings().macbar === true;
@@ -130,7 +132,7 @@ function place() {
 }
 function reserve() {
   const di = ctx.settings().display;
-  const a = menuBar.update(wantMenu() && !hiddenFs, di, MENU_H), b = dockBar.update(wantDock() && !hiddenFs && !autoHide(), di, dockReserve());
+  const a = menuBar.update(wantMenu() && !hiddenFs && !menuHide(), di, MENU_H), b = dockBar.update(wantDock() && !hiddenFs && !autoHide(), di, dockReserve());
   if (a || b) { [100, 400, 1000].forEach((t) => setTimeout(() => { place(); ctx.onReserve(); }, t)); } // Windows çalışma alanını değiştirirken pencereleri iter
 }
 function sync() {
@@ -193,7 +195,7 @@ function fetchIcon(key, exe, hwnd) {
   } catch (e) { ctx.log('pencere simgesi', e.message); }
   app.getFileIcon(exe, { size: 'large' }).then((img) => done(img.isEmpty() ? '' : img.toDataURL())).catch(() => done(''));
 }
-function pushPrefs() { if (alive(dockWin)) dockWin.webContents.send('prefs', { autohide: autoHide(), previews: ctx.settings().macDockPreview !== false, anim: ctx.settings().macDockAnim || 'lively' }); }
+function pushPrefs() { if (alive(menuWin)) menuWin.webContents.send('prefs', { menuhide: menuHide(), anim: ctx.settings().macDockAnim || 'lively', island: Math.round(100 * clampN(ctx.settings().uiScale || 1, 0.8, 1.3)) + 4 }); if (alive(dockWin)) dockWin.webContents.send('prefs', { autohide: autoHide(), previews: ctx.settings().macDockPreview !== false, anim: ctx.settings().macDockAnim || 'lively' }); }
 function poll() {
   if (!enabled()) return;
   if (tick++ % 2 === 0) { try { if (wl.taskbarVisible()) wl.showTaskbar(false); if (tick % 10 === 1 && !wl.getAutohide()) wl.setAutohide(true); } catch {} }
@@ -235,7 +237,7 @@ function poll() {
   if (s !== sig) { sig = s; if (alive(dockWin)) dockWin.webContents.send('macdock:items', payload); }
   const as = active.name + '|' + active.title;
   if (as !== activeSig) { activeSig = as; }
-  if (tick % 40 === 1 && alive(dockWin)) { const b = dockBackdrop(); if (b) dockWin.webContents.send('macdock:bd', b); }
+  if (tick % 40 === 1) { const bw = alive(dockWin) ? dockWin : alive(menuWin) ? menuWin : null, b = bw && dockBackdrop(); if (b) bw.webContents.send('macdock:bd', b); }
 }
 
 function openApp(p) { shell.openPath(p).then((err) => { if (err) ctx.log('Dock: açılamadı', p, err); }); }
@@ -322,9 +324,7 @@ function pushMenus() { // sol üst menüler: uygulama adı, (uygulamanın kendi 
 }
 function targetChanged() {
   menuSig = ''; pushMenus();
-  if (!target) return;
-  menusStart(); clearTimeout(scanT); const h = String(target.hwnd);
-  scanT = setTimeout(() => { if (menusReady) menusSend('scan ' + h); else setTimeout(() => menusSend('scan ' + h), 1500); }, 250);
+  if (alive(menuWin)) { if (Date.now() - darkAt > 5000) { readDark(); darkAt = Date.now(); } menuWin.webContents.send('macmenu:target', { hwnd: target ? String(target.hwnd) : '0', dark: !!darkNow }); } // uygulamanın menüleri yerel katmanda okunur, üstteki panelde açılır
 }
 
 // ---------- Açılır paneller (menüler, Wi‑Fi, Denetim Merkezi): tek pencere, sıvı cam ----------
@@ -368,18 +368,18 @@ function confirmThen(msg, btn, fn) {
 function appleItems() {
   const run = (exe, args) => () => { try { spawn(exe, args, { windowsHide: true, stdio: 'ignore', detached: true }).unref(); } catch {} };
   return [
-    act('about', 'Bu Bilgisayar Hakkında', () => shell.openExternal('ms-settings:about')),
-    act('sets', 'Sistem Ayarları…', () => shell.openExternal('ms-settings:')),
+    act('about', 'Bu Bilgisayar Hakkında', () => shell.openExternal('ms-settings:about'), { icon: '\uE7F4' }),
+    act('sets', 'Sistem Ayarları…', () => shell.openExternal('ms-settings:'), { icon: '\uE713' }),
     SEP,
-    act('start', 'Başlat Menüsü', () => wl.startMenu()),
-    act('task', 'Uygulamayı Zorla Kapat…', run('taskmgr.exe', [])),
+    act('start', 'Başlat Menüsü', () => wl.startMenu(), { icon: '\uE80F' }),
+    act('task', 'Uygulamayı Zorla Kapat…', run('taskmgr.exe', []), { icon: '\uEA39' }),
     SEP,
-    act('sleep', 'Uyku', run('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0'])),
-    act('restart', 'Yeniden Başlat…', () => confirmThen('Bilgisayar yeniden başlatılsın mı?', 'Yeniden Başlat', run('shutdown.exe', ['/r', '/t', '0']))),
-    act('off', 'Kapat…', () => confirmThen('Bilgisayar kapatılsın mı?', 'Kapat', run('shutdown.exe', ['/s', '/t', '0']))),
+    act('sleep', 'Uyku', run('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']), { icon: '\uE708' }),
+    act('restart', 'Yeniden Başlat…', () => confirmThen('Bilgisayar yeniden başlatılsın mı?', 'Yeniden Başlat', run('shutdown.exe', ['/r', '/t', '0'])), { icon: '\uE777' }),
+    act('off', 'Kapat…', () => confirmThen('Bilgisayar kapatılsın mı?', 'Kapat', run('shutdown.exe', ['/s', '/t', '0'])), { icon: '\uE7E8' }),
     SEP,
-    act('lock', 'Ekranı Kilitle', run('rundll32.exe', ['user32.dll,LockWorkStation'])),
-    act('logout', 'Oturumu Kapat…', () => confirmThen('Oturum kapatılsın mı?', 'Oturumu Kapat', run('shutdown.exe', ['/l'])))
+    act('lock', 'Ekranı Kilitle', run('rundll32.exe', ['user32.dll,LockWorkStation']), { icon: '\uE72E' }),
+    act('logout', 'Oturumu Kapat…', () => confirmThen('Oturum kapatılsın mı?', 'Oturumu Kapat', run('shutdown.exe', ['/l'])), { icon: '\uE77B' })
   ];
 }
 function appItems() {
@@ -454,7 +454,19 @@ function popDone() {
   if (alive(menuWin)) menuWin.webContents.send('macpop:closed');
   pop = null;
 }
+let darkAt = 0;
+function openNativePop(kind, m) { // Elma / uygulama / Pencere menüleri: yerel (C#) açılır panel, anında açılır
+  const key = kind + (m.i ?? '') + (m.label || '');
+  if (nPopKey === key) { natSend('pop', 'pop:close', true); nPopKey = ''; return; }
+  if (nPopKey === '' && lastKey === key && Date.now() - popHiddenAt < 300) return; // paneli kapatan tıklama onu yeniden açmasın
+  lastKey = key; popActs = new Map();
+  const data = kind === 'apple' ? appleItems() : kind === 'app' ? appItems() : windowItems();
+  const list = data.map((it) => it.sep ? { sep: true } : it.hd ? { hd: true, label: it.label } : { id: it.id, label: it.label, icon: it.icon || '', checked: !!it.checked });
+  if (Date.now() - darkAt > 5000) { readDark(); darkAt = Date.now(); }
+  nPopKey = key; natSend('pop', 'pop:open', { items: list, key, dark: !!darkNow, x: m.x });
+}
 async function openPop(kind, m) {
+  if (['apple', 'app', 'win'].includes(kind) && menuWin instanceof NatWin) return openNativePop(kind, m);
   const view = kind === 'cc' ? 'cc' : kind === 'wifi' ? 'wifi' : 'menu', key = kind + (m.i ?? '') + (m.label || '');
   const visible = alive(popWin) && popWin.isVisible() && !!pop && !popClosing;
   if (visible && pop.key === key) return closePop();
@@ -500,6 +512,7 @@ function apply() {
   if (alive(popWin)) popWin.webContents.send('maccc:state', ccState());
 }
 function stop() {
+  try { natSend('pop', 'pop:close', true); } catch {}
   if (timer) { clearInterval(timer); timer = null; }
   [menuWin, dockWin, popWin].forEach((w) => { if (alive(w)) w.destroy(); }); menuWin = dockWin = popWin = null; popReady = false; pop = null;
   [ccProc, menusProc].forEach((p) => { if (p) { try { p.kill(); } catch {} } }); ccProc = menusProc = null; menusReady = false;
@@ -532,7 +545,9 @@ function init(c) {
     const list = r.slice(0, 4).map((q) => ({ x: q.x | 0, y: q.y | 0, width: Math.max(1, q.width | 0), height: Math.max(1, q.height | 0) }));
     if (list.length) try { dockWin.setShape(list); } catch {}
   });
-  ipcMain.on('macmenu:ready', () => { themeSig = ''; pushTheme(); menuSig = ''; pushMenus(); });
+  ipcMain.on('macmenu:ready', () => { themeSig = ''; pushTheme(); menuSig = ''; pushMenus(); pushPrefs(); const b = dockBackdrop(); if (b && alive(menuWin)) menuWin.webContents.send('macdock:bd', b); });
+  ipcMain.on('macpop:nact', (_e, id) => { nPopKey = ''; const fn = popActs.get(id); if (fn) setTimeout(() => { try { fn(); } catch (e) { ctx.log('menü eylemi', e.message); } }, 80); });
+  ipcMain.on('macpop:nclosed', () => { nPopKey = ''; popHiddenAt = Date.now(); });
   ipcMain.on('macdock:win', (_e, h) => { const n = Number(h); if (Number.isFinite(n)) { wl.activate(n); setTimeout(poll, 150); } });
   ipcMain.on('macdock:unpin', (_e, k) => { if (typeof k === 'string') ctx.patch({ dockPins: pins().filter((q) => lc(q) !== k).join('\n') }); });
   ipcMain.on('macdock:reorder', (_e, keys) => {

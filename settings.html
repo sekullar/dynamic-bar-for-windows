@@ -77,14 +77,17 @@
     X('panelKey', 'Paneli aç/kapat kısayolu', 'Control+Alt+B') + X('testKey', 'Test bildirimi kısayolu', 'Control+Alt+N') +
     '<small>Örnek: Control+Alt+B, Alt+Shift+D. Bar tıklanmazsa bu kısayol paneli yine açar.</small>' +
     H('macOS Dock') +
-    T('macbar', 'macOS Dock (görev çubuğunu değiştir)', 'Açıkken Windows görev çubuğu gizlenir, altta macOS Big Sur tarzı Dock gelir. Uygulama kapanınca görev çubuğu geri gelir.') +
+    T('macbar', 'macOS görünümü (görev çubuğunu değiştir)', 'Açıkken Windows görev çubuğu gizlenir; üstte macOS menü çubuğu, altta Dock gelir. Uygulama kapanınca görev çubuğu geri gelir.') +
+    T('macMenu', 'Üst menü çubuğu', 'Elma menüsü, etkin uygulamanın adı (kalın), uygulamanın kendi menüleri, Pencere menüsü, Wi‑Fi, pil, denetim merkezi ve saat.') +
+    T('macMenuHide', 'Menü çubuğu otomatik gizlensin', 'İmleç ekranın en üstüne gelince belirir. Açıkken yer ayırmaz, pencereler tam ekranı kaplar.') +
+    S('macMenuText', 'Menü çubuğu yazı rengi', [['auto', 'Otomatik (duvar kağıdına göre)'], ['white', 'Beyaz'], ['black', 'Siyah']]) +
     G('macDockSize', 'Dock simge boyutu', 28, 72, 2) +
     T('macDockHide', 'Dock otomatik gizlensin', 'Dock, imleç ekranın en altına inince belirir. Açıkken Dock yer ayırmaz, pencereler tam ekranı kaplar.') +
-    S('macDockAnim', 'Dock animasyonu', [['lively', 'Hareketli'], ['soft', 'Yumuşak'], ['off', 'Büyütme kapalı']]) +
+    S('macDockAnim', 'Dock ve menü animasyonları', [['lively', 'Hareketli'], ['soft', 'Yumuşak (yavaş)'], ['off', 'Kapalı (anında)']]) +
     T('macDockPreview', 'Pencere önizlemeleri', 'Çalışan uygulamanın simgesinde bekleyince pencerelerinin küçük görüntüleri çıkar; birine tıklayınca o pencere öne gelir.') +
     T('macIconPack', 'macOS simge paketi', 'Tanınan uygulamalar (Chrome, VS Code, Discord…) macOS tarzı simgeyle görünür; diğerleri beyaz kare plakaya oturur.') +
     T('macNative', 'Yerel GPU çizimi (önerilen)', 'Dock ayrı bir C# uygulamasıyla çizilir: akıcı büyütme. Kapatırsan web tabanlı sürüm kullanılır.') +
-    '<small>Üst menü çubuğu arşivde. Birden çok ekranda yalnızca seçili ekrana Dock konur.</small>' +
+    '<small>Birden çok ekranda yalnızca seçili ekrana Dock ve menü çubuğu konur.</small>' +
     H('Panel sayfaları') +
     T('pageMedia', 'Medya', 'Çalan parça, kapak ve oynatma kontrolleri.') +
     T('artOnline', 'Eksik kapakları internetten bul', 'Sistem kapak vermezse parça adı iTunes araması ile sorgulanır. Kapalıyken hiçbir şey dışarı gönderilmez.') +

@@ -50,6 +50,8 @@ static class N
     [StructLayout(LayoutKind.Sequential)] public struct DWM_THUMBNAIL_PROPERTIES { public uint flags; public RECT dest, src; public byte opacity; public int visible, clientOnly; }
     [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int l, int t, int r, int b);
     [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr h, IntPtr rgn, bool redraw);
+    [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int k);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, int e);
     [DllImport("user32.dll")] public static extern IntPtr SetCapture(IntPtr h);
     [DllImport("user32.dll")] public static extern bool ReleaseCapture();
     [DllImport("dwmapi.dll")] static extern int DwmRegisterThumbnail(IntPtr dest, IntPtr src, out IntPtr thumb);
