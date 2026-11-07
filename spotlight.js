@@ -4,6 +4,25 @@
 const { BrowserWindow, screen, ipcMain } = require('electron');
 const http = require('http'), path = require('path'), fs = require('fs'), os = require('os');
 
+// Pyramid (not defteri) kuruluysa ayarlarından not klasörünü okuruz; yoksa !!p komutu etkin olmaz.
+const pyramidDir = () => {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'pyramid', 'settings.json'), 'utf8'));
+    return s && typeof s.notesDir === 'string' && fs.statSync(s.notesDir).isDirectory() ? s.notesDir : null;
+  } catch { return null; }
+};
+function pyramidNote(text) { // Pyramid not bicimi: front matter + "# baslik"; ilk satir baslik olur
+  const dir = pyramidDir(); text = String(text || '').trim().slice(0, 20000);
+  if (!dir || !text) return false;
+  const lines = text.split(/\r?\n/), title = lines[0].replace(/^#+\s*/, '').trim().slice(0, 60) || 'Hızlı not', rest = lines.slice(1).join('\n').trim();
+  const base = title.replace(/[<>:"/\|?*\x00-\x1f]/g, ' ').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '') || 'Hızlı not';
+  let f = path.join(dir, base + '.md'), n = 2;
+  while (fs.existsSync(f)) f = path.join(dir, base + ' ' + n++ + '.md');
+  const now = new Date().toISOString();
+  fs.writeFileSync(f, '---\nid: ' + require('crypto').randomUUID() + '\ncreated: ' + now + '\nupdated: ' + now + '\ntags: []\n---\n# ' + title + '\n\n' + (rest ? rest + '\n' : ''), { encoding: 'utf8', flag: 'wx' });
+  return true;
+}
+
 const LINK = path.join(os.homedir(), '.dynbar-ecosystem', 'spotlight.json');
 const W = 800; // hap 560 geniş; ölçek 1.3'e ve gölgeye yetecek kadar boşluk
 let ctx, sw = null, closing = false, opening = false, shownAt = 0, shrinkT, hideT;
@@ -84,7 +103,8 @@ function create(info) {
   ctx.onState(true);
 }
 
-ipcMain.handle('search:init', (e) => (own(e) ? { info: sw.info, settings: ctx.settings() } : null));
+ipcMain.handle('search:init', (e) => (own(e) ? { info: sw.info, settings: ctx.settings(), pyramid: !!pyramidDir() } : null));
+ipcMain.handle('search:pyramid', (e, text) => { if (!own(e)) return false; try { return pyramidNote(text); } catch { return false; } });
 ipcMain.on('search:ready', (e) => {
   if (!own(e)) return;
   shownAt = Date.now(); nudge(); sw.show(); sw.focus(); sw.webContents.focus();

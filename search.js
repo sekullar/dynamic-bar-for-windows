@@ -66,7 +66,7 @@
       if (r.sub) text.append(el('div', 'sub', r.sub));
       row.append(ic, text, el('span', 'kind', r.kindLabel || ''), el('span', 'ret', '↵'));
       row.onmousemove = () => { if (sel !== i) { sel = i; mark(); } };
-      row.onclick = () => activate(i);
+      row.onclick = () => (pyr() !== null ? saveNote() : activate(i));
       list.append(row);
     });
     footer.classList.toggle('enter', fresh);
@@ -80,13 +80,27 @@
   }
 
   async function doSearch() {
-    const t = ++token, q = input.value;
+    const t = ++token, q = input.value, pt = pyr();
+    if (pt !== null) {
+      results = [{ group: 'Pyramid', kind: 'file', name: pt ? "Pyramid'e not ekle: " + pt.split(String.fromCharCode(10))[0].slice(0, 80) : 'Not metnini yaz…', sub: pt ? '' : '!!p ardından notunu yaz, Enter ile kaydet', kindLabel: 'Not' }]; sel = 0;
+      statusEl.textContent = ''; render(); return;
+    }
     if (!q.trim()) { results = []; statusEl.textContent = ''; render(); return; }
     const res = await dynbar.invoke('search:query', q);
     if (t !== token || !res) return;
     results = res.results || []; sel = 0;
     statusEl.textContent = res.scanning ? (S.scanning || '') : '';
     render();
+  }
+
+  // !!p <metin>: Pyramid'e yeni not. Pyramid kurulu değilse komut devre dışıdır, metin normal aranır.
+  const pyr = () => { const m = init.pyramid && /^!!p(?:\s+([\s\S]*))?$/i.exec(input.value.trim()); return m ? (m[1] || '').trim() : null; };
+  let saving = false;
+  async function saveNote() {
+    const t = pyr(); if (!t || saving) return; saving = true;
+    const ok = await dynbar.invoke('search:pyramid', t);
+    statusEl.textContent = ok ? "Pyramid'e not kaydedildi" : 'Not kaydedilemedi';
+    if (ok) setTimeout(() => dynbar.send('search:close'), 900); else saving = false;
   }
 
   function activate(i, mode) {
@@ -99,7 +113,7 @@
     if (e.key === 'Escape') { e.preventDefault(); if (input.value) { input.value = ''; doSearch(); } else dynbar.send('search:close'); }
     else if (e.key === 'ArrowDown') { e.preventDefault(); if (results.length) { sel = (sel + 1) % results.length; mark(); } }
     else if (e.key === 'ArrowUp') { e.preventDefault(); if (results.length) { sel = (sel - 1 + results.length) % results.length; mark(); } }
-    else if (e.key === 'Enter') { e.preventDefault(); activate(sel, e.ctrlKey || e.metaKey ? 'reveal' : 'open'); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (pyr() !== null) { saveNote(); return; } activate(sel, e.ctrlKey || e.metaKey ? 'reveal' : 'open'); }
     else if (e.altKey && /^[1-9]$/.test(e.key)) { e.preventDefault(); activate(+e.key - 1); }
   });
 
