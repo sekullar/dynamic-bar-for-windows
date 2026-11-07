@@ -47,6 +47,13 @@ static class Program
         pop?.Dispose(); menu?.Dispose(); dock?.Dispose();
     }
 
+    static List<PopItem> ParseItems(JsonElement d)
+    {
+        var li = new List<PopItem>();
+        foreach (var e in d.GetProperty("items").EnumerateArray())
+            li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), RIcon = Str(e, "ricon"), Ch = Str(e, "ch"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis"), Slider = Bool(e, "slider"), Value = Num(e, "value") });
+        return li;
+    }
     static void EnsurePop()
     {
         pop ??= new PopWindow(0, 0, 16, 16)
@@ -62,7 +69,7 @@ static class Program
         if (pop != null && pop.IsOpen && pop.Key == key) { pop.Close(); return; }
         var li = HMenu.Items(tgt, idx); if (li.Count == 0) { menu.ClearOpen(); return; }
         EnsurePop(); float sc = menu.Scale; int lx = menu.PxX + (int)((x - 4) * sc), ty = menu.PxY + (int)(26 * sc);
-        menu.PopOpen = true; pop.Open(li, key, darkNow, lx, ty, menu.PxX + menu.PxW, sc);
+        menu.PopOpen = true; pop.Open(li, key, darkNow, lx, false, ty, menu.PxX + menu.PxW, sc);
     }
 
     static void Safe(Action a) { try { a(); } catch (Exception e) { Emit("native:error", "frame: " + e.GetType().Name + ": " + e.Message); Thread.Sleep(50); } }
@@ -108,12 +115,13 @@ static class Program
         {
             if (menu == null) return;
             EnsurePop(); darkNow = Bool(d, "dark");
-            var li = new List<PopItem>();
-            foreach (var e in d.GetProperty("items").EnumerateArray()) li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis") });
-            float sc = menu.Scale; int lx = menu.PxX + (int)((Num(d, "x") - 4) * sc), ty = menu.PxY + (int)(26 * sc);
-            menu.PopOpen = true; pop.Open(li, Str(d, "key") ?? "", darkNow, lx, ty, menu.PxX + menu.PxW, sc);
+            var li = ParseItems(d);
+            float sc = menu.Scale; bool right = Bool(d, "right");
+            int ax = right ? menu.PxX + (int)((Num(d, "x") + Num(d, "w")) * sc) : menu.PxX + (int)((Num(d, "x") - 4) * sc), ty = menu.PxY + (int)(26 * sc);
+            menu.PopOpen = true; pop.Open(li, Str(d, "key") ?? "", darkNow, ax, right, ty, menu.PxX + menu.PxW, sc);
             return;
         }
+        if (ch == "pop:update") { if (pop != null && pop.IsOpen) pop.Update(ParseItems(d)); return; }
         if (ch == "prefs") { if (dock != null) { dock.AutoHide = Bool(d, "autohide"); dock.PreviewOn = !d.TryGetProperty("previews", out var pv) || pv.ValueKind != JsonValueKind.False; dock.SetAnim(Str(d, "anim") ?? "lively"); dock.Dirty = true; } return; }
         if (ch == "quit") { running = false; return; }
         if (ch == "bounds")

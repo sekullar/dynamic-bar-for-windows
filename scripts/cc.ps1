@@ -35,7 +35,7 @@ while (($l = [Console]::In.ReadLine()) -ne $null) {
       'get' { Out1('vol ' + [Cc]::Get()); Bri }
       'vol' { [Cc]::Set([int]$p[1]); Out1('vol ' + [Cc]::Get()) }
       'mute' { [Cc]::Mute(); Out1('vol ' + [Cc]::Get()) }
-      'bri' { $n = [Math]::Max(0, [Math]::Min(100, [int]$p[1])); Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop | ForEach-Object { $_.WmiSetBrightness(1, $n) | Out-Null }; Out1("bri $n") }
+      'bri' { $n = [Math]::Max(0, [Math]::Min(100, [int]$p[1])); Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop | ForEach-Object { Invoke-CimMethod -InputObject $_ -MethodName WmiSetBrightness -Arguments @{ Timeout = [uint32]1; Brightness = [byte]$n } | Out-Null }; Out1("bri $n") }
     }
   } catch {}
 }

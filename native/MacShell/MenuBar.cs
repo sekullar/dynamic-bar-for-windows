@@ -188,7 +188,7 @@ class MenuWindow : Surface
     {
         if (!PopOpen || hot < 0 || hot >= btns.Count) return; var b = btns[hot];
         if (b.Kind == "hm" && openId != b.Id) { openId = b.Id; OpenHm?.Invoke(b.I, b.X, b.W, b.Label); return; }
-        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
+        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win" || b.Kind == "wifi" || b.Kind == "cc") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
     }
     protected override IntPtr Msg(uint m, IntPtr w, IntPtr l, out bool handled)
     {

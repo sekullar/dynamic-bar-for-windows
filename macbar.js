@@ -17,6 +17,7 @@ const NAMES = { chrome: 'Google Chrome', msedge: 'Microsoft Edge', explorer: 'Do
   wt: 'Terminal', cmd: 'Komut İstemi', powershell: 'PowerShell', notepad: 'Not Defteri', calc: 'Hesap Makinesi', taskmgr: 'Görev Yöneticisi', applicationframehost: 'Uygulama' };
 const SETTINGS_URIS = new Set(['ms-settings:network-wifi', 'ms-settings:bluetooth', 'ms-settings:display', 'ms-settings:sound', 'ms-settings:', 'ms-settings:about', 'ms-settings:nightlight', 'ms-settings:network-airplanemode']);
 
+let wifiTimer = null;
 let ctx = null, menuWin = null, dockWin = null, ccProc = null, timer = null, hiddenFs = false, tick = 0;
 let taskbarOn = false, origAutohide = false, sig = '', activeSig = '', themeSig = '';
 let items = [], groups = new Map(), order = [], active = { name: 'Masaüstü', title: '' }, fgNow = null, target = null, menuSig = '';
@@ -289,6 +290,7 @@ function ccStart() {
       else if (p[0] === 'ready') ccSend('get');
       else return;
       if (alive(popWin)) popWin.webContents.send('maccc:state', ccState());
+      refreshCcPop();
     });
     ccProc.on('exit', () => { ccProc = null; });
   } catch (e) { ctx.log('cc.ps1', e.message); ccProc = null; }
@@ -407,6 +409,13 @@ function windowItems() {
     ...g.wins.slice(0, 14).map((w, i) => act('w-' + i, w.title.length > 40 ? w.title.slice(0, 39) + '…' : w.title, () => wl.activate(w.hwnd), { checked: String(w.hwnd) === String(t.hwnd) }))
   ];
 }
+let wifiCache = null;
+function regWifi(d) { // ağ satırlarının eylemleri (önbellekten açılışta da gerekir)
+  d.nets.forEach((n) => popActs.set(n.id, () => { if (n.current) return; if (n.known) spawn('netsh', ['wlan', 'connect', 'name=' + n.ssid], { windowsHide: true, stdio: 'ignore' }); else shell.openExternal('ms-settings:network-wifi'); }));
+  popActs.set('settings', () => shell.openExternal('ms-settings:network-wifi'));
+}
+let wifiBusy = false;
+function warmWifi(force) { if (wifiBusy || (!force && wifiCache && Date.now() - wifiCache.t < 20000)) return; wifiBusy = true; wifiData().catch(() => {}).finally(() => { wifiBusy = false; }); }
 async function wifiData() {
   const [ifc, nets, prof] = await Promise.all([sh('netsh wlan show interfaces'), sh('netsh wlan show networks mode=bssid'), sh('netsh wlan show profiles')]);
   const cm = ifc.match(/^\s*SSID\s*:\s*(.+?)\s*$/m), current = cm ? cm[1] : '';
@@ -422,9 +431,8 @@ async function wifiData() {
   if (current && !map.has(current)) map.set(current, { ssid: current, signal: 60, secured: true });
   const list = [...map.values()].sort((a, b) => (b.ssid === current) - (a.ssid === current) || b.signal - a.signal).slice(0, 10)
     .map((n, i) => ({ ...n, id: 'n' + i, current: n.ssid === current, known: known.has(n.ssid) }));
-  list.forEach((n) => popActs.set(n.id, () => { if (n.current) return; if (n.known) spawn('netsh', ['wlan', 'connect', 'name=' + n.ssid], { windowsHide: true, stdio: 'ignore' }); else shell.openExternal('ms-settings:network-wifi'); }));
-  popActs.set('settings', () => shell.openExternal('ms-settings:network-wifi'));
-  return { current, nets: list };
+  const out = { current, nets: list }; regWifi(out); wifiCache = { t: Date.now(), d: out };
+  return out;
 }
 function ensurePop() {
   if (alive(popWin)) return;
@@ -455,18 +463,53 @@ function popDone() {
   pop = null;
 }
 let darkAt = 0;
-function openNativePop(kind, m) { // Elma / uygulama / Pencere menüleri: yerel (C#) açılır panel, anında açılır
+const toNative = (it) => it.sep ? { sep: true } : it.hd ? { hd: true, label: it.label } : it.slider ? { slider: true, id: it.id, icon: it.icon || '', value: it.value, ch: it.ch }
+  : { id: it.id, label: it.label, icon: it.icon || '', ricon: it.ricon || '', checked: !!it.checked, dis: !!it.dis };
+function ccItems() { // Denetim Merkezi: ses/parlaklık kaydırıcıları ve kısayollar
+  const st = ccState(), run = (exe, args) => () => { try { spawn(exe, args, { windowsHide: true, stdio: 'ignore', detached: true }).unref(); } catch {} };
+  const a = [{ slider: true, id: 'vol', icon: st.muted ? '\uE74F' : '\uE767', value: st.vol, ch: 'maccc:vol' }];
+  if (st.bri != null) a.push({ slider: true, id: 'bri', icon: '\uE706', value: st.bri, ch: 'maccc:bri' });
+  a.push(SEP,
+    act('dark', 'Karanlık Mod', () => toggleDark(), { icon: '\uE790', checked: !!st.dark }),
+    act('dnd', 'Rahatsız Etme', () => ctx.patch({ dnd: !ctx.settings().dnd }), { icon: '\uE708', checked: !!st.dnd }),
+    act('mute', st.muted ? 'Sesi Aç' : 'Sesi Kapat', () => ccSend('mute'), { icon: '\uE74F' }),
+    SEP,
+    act('disp', 'Ekran Ayarları…', () => shell.openExternal('ms-settings:display'), { icon: '\uE7F4' }),
+    act('snd', 'Ses Ayarları…', () => shell.openExternal('ms-settings:sound'), { icon: '\uE767' }),
+    act('calc', 'Hesap Makinesi', run('calc.exe', []), { icon: '\uE8EF' }),
+    act('clock', 'Saat', () => shell.openExternal('ms-clock:'), { icon: '\uE916' }),
+    act('shot', 'Ekran Görüntüsü', () => shell.openExternal('ms-screenclip:'), { icon: '\uE722' }),
+    SEP,
+    act('dbset', 'Dynamic Bar Ayarları…', () => ctx.openSettings(), { icon: '\uE713' }));
+  return a;
+}
+function wifiItems(d) {
+  const a = [{ hd: true, label: 'Wi‑Fi' }];
+  if (!d) a.push({ id: 'load', label: 'Ağlar aranıyor…', dis: true });
+  else if (!d.nets.length) a.push({ id: 'none', label: 'Ağ bulunamadı', dis: true });
+  else d.nets.forEach((n) => a.push({ id: n.id, label: n.ssid, icon: '\uE701', checked: n.current, ricon: n.secured && !n.current ? '\uE72E' : '' }));
+  a.push(SEP, act('settings', 'Ağ Ayarları…', () => shell.openExternal('ms-settings:network-wifi'), { icon: '\uE713' }));
+  return a;
+}
+function refreshCcPop() { if (nPopKey.startsWith('cc')) natSend('pop', 'pop:update', { items: ccItems().map(toNative) }); }
+function openNativePop(kind, m) { // menüler, Wi‑Fi, Denetim Merkezi: yerel (C#) açılır panel, anında açılır
   const key = kind + (m.i ?? '') + (m.label || '');
   if (nPopKey === key) { natSend('pop', 'pop:close', true); nPopKey = ''; return; }
   if (nPopKey === '' && lastKey === key && Date.now() - popHiddenAt < 300) return; // paneli kapatan tıklama onu yeniden açmasın
   lastKey = key; popActs = new Map();
-  const data = kind === 'apple' ? appleItems() : kind === 'app' ? appItems() : windowItems();
-  const list = data.map((it) => it.sep ? { sep: true } : it.hd ? { hd: true, label: it.label } : { id: it.id, label: it.label, icon: it.icon || '', checked: !!it.checked });
+  let data;
+  if (kind === 'apple') data = appleItems(); else if (kind === 'app') data = appItems(); else if (kind === 'win') data = windowItems();
+  else if (kind === 'cc') { ccStart(); ccSend('get'); data = ccItems(); }
+  else { // önbellekteki liste anında gösterilir, arkadan yenilenir
+    if (wifiCache) regWifi(wifiCache.d);
+    data = wifiItems(wifiCache ? wifiCache.d : null);
+    wifiBusy = true; wifiData().then((d) => { if (nPopKey === key) natSend('pop', 'pop:update', { items: wifiItems(d).map(toNative) }); }).catch(() => {}).finally(() => { wifiBusy = false; });
+  }
   if (Date.now() - darkAt > 5000) { readDark(); darkAt = Date.now(); }
-  nPopKey = key; natSend('pop', 'pop:open', { items: list, key, dark: !!darkNow, x: m.x });
+  nPopKey = key; natSend('pop', 'pop:open', { items: data.map(toNative), key, dark: !!(kind === 'cc' ? ccState().dark : darkNow), x: m.x, w: m.w, right: kind === 'wifi' || kind === 'cc' });
 }
 async function openPop(kind, m) {
-  if (['apple', 'app', 'win'].includes(kind) && menuWin instanceof NatWin) return openNativePop(kind, m);
+  if (['apple', 'app', 'win', 'wifi', 'cc'].includes(kind) && menuWin instanceof NatWin) { try { return openNativePop(kind, m); } catch (e) { ctx.log('yerel panel', e.stack || e.message); return; } }
   const view = kind === 'cc' ? 'cc' : kind === 'wifi' ? 'wifi' : 'menu', key = kind + (m.i ?? '') + (m.label || '');
   const visible = alive(popWin) && popWin.isVisible() && !!pop && !popClosing;
   if (visible && pop.key === key) return closePop();
@@ -508,10 +551,12 @@ function apply() {
   hideTaskbar(); setTimeout(() => { ensurePop(); warmBackdrop(true); }, 1500);
   sync();
   if (!timer) { timer = setInterval(poll, 700); poll(); }
+  if (!wifiTimer) { wifiTimer = setInterval(() => warmWifi(true), 45000); setTimeout(() => warmWifi(true), 3000); }
   pushTheme(); pushPrefs();
   if (alive(popWin)) popWin.webContents.send('maccc:state', ccState());
 }
 function stop() {
+  if (wifiTimer) { clearInterval(wifiTimer); wifiTimer = null; }
   try { natSend('pop', 'pop:close', true); } catch {}
   if (timer) { clearInterval(timer); timer = null; }
   [menuWin, dockWin, popWin].forEach((w) => { if (alive(w)) w.destroy(); }); menuWin = dockWin = popWin = null; popReady = false; pop = null;
@@ -558,7 +603,7 @@ function init(c) {
     sig = ''; ctx.patch({ dockPins: np.join('\n') }); setTimeout(poll, 50);
   });
   ipcMain.on('macdock:ready', () => { pushPrefs(); sig = ''; const b = dockBackdrop(); if (b && alive(dockWin)) dockWin.webContents.send('macdock:bd', b); });
-  ipcMain.on('macmenu:hover', () => warmBackdrop());
+  ipcMain.on('macmenu:hover', () => { warmBackdrop(); warmWifi(); });
   ipcMain.on('macmenu:panel', () => ctx.panel());
   ipcMain.on('macmenu:open', (_e, m) => {
     if (!m || typeof m.kind !== 'string') return;
