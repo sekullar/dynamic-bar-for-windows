@@ -108,7 +108,7 @@ abstract class Surface : IDisposable
             PxW = w; PxH = h; Swap.ResizeBuffers(0, (uint)w, (uint)h, Format.Unknown, SwapChainFlags.None);
         }
         PxX = x; PxY = y;
-        N.SetWindowPos(Hwnd, N.HWND_TOPMOST, x, y, w, h, N.SWP_NOACTIVATE | N.SWP_SHOWWINDOW);
+        N.SetWindowPos(Hwnd, N.HWND_TOPMOST, x, y, w, h, N.SWP_NOACTIVATE | (Visible ? N.SWP_SHOWWINDOW : 0)); // gizliyken (tam ekran) yeniden gösterme
         Dirty = true; OnResize();
     }
     public void SetVisible(bool v) { Visible = v; N.ShowWindow(Hwnd, v ? 4 : 0); Dirty = true; }
