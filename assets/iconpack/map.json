@@ -76,5 +76,6 @@
  "powershell_ise": "terminal",
  "photoshop": "photoshop",
  "epicgameslauncher": "epicgameslauncher",
- "onedrive": "onedrive"
+ "onedrive": "onedrive",
+  "systemsettings": "system-settings"
 }

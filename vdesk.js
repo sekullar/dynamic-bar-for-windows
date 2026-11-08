@@ -2,7 +2,7 @@
 // Electron'un win.setVisibleOnAllWorkspaces() fonksiyonu Windows'ta HİÇBİR ŞEY yapmaz; pencere yalnızca oluşturulduğu masaüstünde görünür.
 // Belgelenmiş IVirtualDesktopManager::MoveWindowToDesktop ise kendi sürecimizin penceresini istediğimiz masaüstüne taşıyabilir.
 // Bu dosya onu koffi ile çağırır. koffi yoksa veya çağrı başarısız olursa false döner; main.js bu durumda yedek yola geçer.
-let K = null, state = 'init', mgr = null, P_Move = null, CoCreate = null;
+let K = null, state = 'init', mgr = null, P_Move = null, P_Id = null, P_Cur = null, CoCreate = null;
 
 const CLSID_VDM = 'AA509086-5CA9-4C25-8F95-589D3C07B48A', IID_VDM = 'A5CD92FF-29BE-454C-8D04-D82879FB3F1B';
 
@@ -38,6 +38,8 @@ function init() {
     ole.func('long __stdcall CoInitializeEx(void *reserved, uint32_t flags)')(null, 2); // Chromium zaten başlatmıştır; sonucu önemli değil
     CoCreate = ole.func('long __stdcall CoCreateInstance(const void *clsid, void *outer, uint32_t ctx, const void *iid, _Out_ void **ppv)');
     P_Move = K.proto('long __stdcall VdmMove(void *self, uintptr_t hwnd, const void *guid)');
+    P_Id = K.proto('long __stdcall VdmGetId(void *self, uintptr_t hwnd, void *guid)');
+    P_Cur = K.proto('long __stdcall VdmOnCur(void *self, uintptr_t hwnd, _Out_ int32_t *on)');
     connect();
     state = 'ok';
   } catch (e) {
@@ -64,4 +66,18 @@ function moveHere(handleBuf, guidStr) {
   return false;
 }
 
-module.exports = { moveHere, guid, _slot: slot, _setKoffi: (k) => (K = k) };
+const str = (b) => {
+  const h = (n) => n.toString(16).padStart(8, '0');
+  return (h(b.readUInt32LE(0)) + '-' + h(b.readUInt16LE(4)).slice(4) + '-' + h(b.readUInt16LE(6)).slice(4) + '-' + b.subarray(8, 10).toString('hex') + '-' + b.subarray(10, 16).toString('hex')).toUpperCase();
+};
+// Pencere geçerli masaüstünde mi? true / false; bilinmiyorsa null
+function isOnCurrent(h) {
+  if (process.platform !== 'win32' || !init()) return null;
+  try { const o = [0]; return slot(mgr, 3, P_Cur, BigInt(h), o) === 0 ? !!o[0] : null; } catch { return null; }
+}
+// Pencerenin masaüstü kimliği (büyük harfli GUID dizgisi) ya da null
+function windowDesktop(h) {
+  if (process.platform !== 'win32' || !init()) return null;
+  try { const b = Buffer.alloc(16); if (slot(mgr, 4, P_Id, BigInt(h), b) !== 0 || b.every((x) => x === 0)) return null; return str(b); } catch { return null; }
+}
+module.exports = { isOnCurrent, windowDesktop, moveHere, guid, _slot: slot, _setKoffi: (k) => (K = k) };

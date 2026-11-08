@@ -36,8 +36,9 @@ const useNative = () => ctx.settings().macNative !== false && !!nativeExe();
 function natSend(w, ch, d) { if (nat && nat.stdin.writable) { try { nat.stdin.write(JSON.stringify({ w, ch, d }) + '\n'); } catch {} } }
 function natStart() {
   if (nat) return; const exe = nativeExe(); if (!exe) return;
-  nat = spawn(exe, [], { cwd: path.dirname(exe), windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] });
+  nat = spawn(exe, [], { cwd: path.dirname(exe), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   nat.stdin.on('error', () => {});
+  let errTail = ''; nat.stderr.on('data', (c) => { errTail = (errTail + c).slice(-1500); });
   ctx.lines(nat, (l) => {
     let j; try { j = JSON.parse(l); } catch { return; }
     if (j.ch === 'native:hwnd') natHwnd = j.d || natHwnd;
@@ -45,7 +46,7 @@ function natStart() {
     else if (typeof j.ch === 'string' && j.ch.startsWith('mac')) ipcMain.emit(j.ch, { sender: null }, j.d);
   });
   const me = nat;
-  me.on('exit', () => { if (nat !== me) return; nat = null; nPopKey = ''; if (enabled()) { menuWin = dockWin = null; setTimeout(() => { if (enabled() && !nat) { sync(); pushPrefs(); } }, 800); } }); // yerel süreç çökerse yeniden başlat
+  me.on('exit', (code, sig) => { if (nat !== me) return; ctx.log('native kapandı', 'kod=' + code, sig ? 'sinyal=' + sig : '', errTail.trim()); nat = null; nPopKey = ''; if (enabled()) { menuWin = dockWin = null; setTimeout(() => { if (enabled() && !nat) { sync(); pushPrefs(); } }, 800); } }); // yerel süreç çökerse yeniden başlat
 }
 class NatWin {
   constructor(role, rect) { this.role = role; this.alive = true; this.vis = true; natStart(); this.setBounds(rect); this.webContents = { send: (ch, d) => natSend(role, ch, d), isLoading: () => false }; }
@@ -197,16 +198,41 @@ function fetchIcon(key, exe, hwnd) {
   app.getFileIcon(exe, { size: 'large' }).then((img) => done(img.isEmpty() ? '' : img.toDataURL())).catch(() => done(''));
 }
 function pushPrefs() { if (alive(menuWin)) menuWin.webContents.send('prefs', { menuhide: menuHide(), anim: ctx.settings().macDockAnim || 'lively', island: Math.round(100 * clampN(ctx.settings().uiScale || 1, 0.8, 1.3)) + 4 }); if (alive(dockWin)) dockWin.webContents.send('prefs', { autohide: autoHide(), previews: ctx.settings().macDockPreview !== false, anim: ctx.settings().macDockAnim || 'lively' }); }
+const winByH = new Map();
+function deskOrder() { // masaüstlerinin sırası (kayıt defterinde birleşik GUID'ler)
+  try {
+    const o = require('child_process').execFileSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VirtualDesktops', '/v', 'VirtualDesktopIDs'], { windowsHide: true, encoding: 'utf8', timeout: 2000 });
+    const m = /REG_BINARY\s+([0-9A-Fa-f]+)/.exec(o); if (!m) return [];
+    const b = Buffer.from(m[1], 'hex'), r = [];
+    for (let i = 0; i + 16 <= b.length; i += 16) { const g = b.subarray(i, i + 16), h = (n, l) => n.toString(16).padStart(l, '0'); r.push((h(g.readUInt32LE(0), 8) + '-' + h(g.readUInt16LE(4), 4) + '-' + h(g.readUInt16LE(6), 4) + '-' + g.subarray(8, 10).toString('hex') + '-' + g.subarray(10, 16).toString('hex')).toUpperCase()); }
+    return r;
+  } catch { return []; }
+}
+function curDesk() { // geçerli masaüstündeki pencerelerin çoğunluğunun kimliği
+  const v = new Map(); let n = 0;
+  for (const w of winByH.values()) { if (w.other) continue; const g = require('./vdesk').windowDesktop(w.hwnd); if (g) { v.set(g, (v.get(g) || 0) + 1); if (++n >= 6) break; } }
+  return [...v.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0])[0] || null;
+}
+function goActivate(h) { // başka masaüstündeki pencere: o masaüstüne Windows animasyonuyla git, sonra pencereyi öne al
+  const w = winByH.get(String(h));
+  if (!w || !w.other) return wl.activate(h);
+  const ids = deskOrder(), ti = ids.indexOf(w.desk), ci = ids.indexOf(curDesk());
+  if (ti < 0 || ci < 0 || ti === ci) return wl.activate(h);
+  const dir = ti > ci ? 'right' : 'left', n = Math.abs(ti - ci); let i = 0;
+  const step = () => { wl.deskKey(dir); if (++i < n) setTimeout(step, 120); else setTimeout(() => { wl.activate(h); setTimeout(poll, 250); }, 380); };
+  step();
+}
 function poll() {
   if (!enabled()) return;
   if (tick++ % 2 === 0) { try { if (wl.taskbarVisible()) wl.showTaskbar(false); if (tick % 10 === 1 && !wl.getAutohide()) wl.setAutohide(true); } catch {} }
   if (tick % 40 === 1) pushTheme();
   const me = lc(process.execPath), all = wl.list(), g = new Map();
+  winByH.clear(); for (const w of all) winByH.set(String(w.hwnd), w);
   for (const w of all) {
     const e = lc(w.exe), b = base(e);
     if (e === me || BLOCK.has(b)) continue;
     const frame = b === 'applicationframehost.exe', key = frame ? e + '#' + w.hwnd : e;
-    let x = g.get(key); if (!x) { x = { key, exe: w.exe, name: frame ? w.title : pretty(w.exe), pin: !frame, wins: [] }; g.set(key, x); }
+    let x = g.get(key); if (!x) { x = { key, exe: w.exe, iconExe: (frame && w.real) || w.exe, name: frame ? w.title : pretty(w.exe), pin: !frame, wins: [] }; g.set(key, x); }
     x.wins.push(w);
   }
   groups = g;
@@ -217,9 +243,9 @@ function poll() {
   order = order.filter((k) => g.has(k)); for (const k of g.keys()) if (!order.includes(k)) order.push(k);
   const pinList = pins(), seen = new Set(), out = [];
   const push = (key, exe, name, x, pinned) => {
-    const ik = key.replace(/#.*/, '');
-    fetchIcon(ik, exe, x && x.wins[0].hwnd);
-    out.push({ key, name, icon: icons.get(ik) || '', pack: packed.has(ik), running: !!x, count: x ? x.wins.length : 0, active: !!x && isActive(x), minimized: !!x && x.wins.every((w) => w.minimized), pinned, wins: x ? x.wins.slice(0, 5).map((w) => ({ h: String(w.hwnd), t: w.title, m: !!w.minimized })) : [] });
+    const ik = x && x.iconExe ? lc(x.iconExe) : key.replace(/#.*/, ''); // UWP pencereler gerçek uygulamalarına göre ayrı simge alır
+    fetchIcon(ik, (x && x.iconExe) || exe, x && x.wins[0].hwnd);
+    out.push({ key, name, icon: icons.get(ik) || '', pack: packed.has(ik), running: !!x, count: x ? x.wins.length : 0, active: !!x && isActive(x), minimized: !!x && x.wins.every((w) => w.minimized), pinned, wins: x ? x.wins.filter((w) => !w.other).slice(0, 5).map((w) => ({ h: String(w.hwnd), t: w.title, m: !!w.minimized })) : [] });
   };
   for (const p of pinList) { const k = lc(p), x = g.get(k); seen.add(k); push(k, p, x ? x.name : pretty(p), x, true); }
   for (const k of order) if (!seen.has(k)) { const x = g.get(k); push(k, x.exe, x.name, x, false); }
@@ -247,15 +273,16 @@ function click(key) {
   if (!x) { const p = pins().find((q) => lc(q) === key); if (p) openApp(p); return; }
   const fgH = fgNow && String(fgNow.hwnd), act = items.find((i) => i.key === key);
   if (act && act.active) {
-    if (x.wins.length > 1) { const i = x.wins.findIndex((w) => String(w.hwnd) === fgH), n = x.wins[(i + 1) % x.wins.length]; wl.activate(n.hwnd); } // aynı uygulamanın sıradaki penceresi
+    const here = x.wins.filter((w) => !w.other);
+    if (here.length > 1) { const i = here.findIndex((w) => String(w.hwnd) === fgH), n = here[(i + 1) % here.length]; wl.activate(n.hwnd); } // aynı uygulamanın sıradaki penceresi
     else wl.minimize(x.wins[0].hwnd);
-  } else wl.activate((x.wins.find((w) => !w.minimized) || x.wins[0]).hwnd);
+  } else goActivate((x.wins.find((w) => !w.minimized && !w.other) || x.wins.find((w) => !w.other) || x.wins[0]).hwnd);
   setTimeout(poll, 150);
 }
 function contextMenu(key) {
   const x = groups.get(key), it = items.find((i) => i.key === key); if (!it) return;
   const t = [{ label: it.name, enabled: false }, { type: 'separator' }];
-  if (x && x.wins.length > 1) { x.wins.slice(0, 12).forEach((w) => t.push({ label: (w.title.length > 48 ? w.title.slice(0, 47) + '…' : w.title), click: () => wl.activate(w.hwnd) })); t.push({ type: 'separator' }); }
+  if (x && x.wins.length > 1) { x.wins.slice(0, 12).forEach((w) => t.push({ label: (w.title.length > 48 ? w.title.slice(0, 47) + '…' : w.title), click: () => goActivate(w.hwnd) })); t.push({ type: 'separator' }); }
   const exe = x ? x.exe : pins().find((q) => lc(q) === key);
   if (x ? x.pin : true) {
     t.push(it.pinned ? { label: "Dock'tan kaldır", click: () => ctx.patch({ dockPins: pins().filter((q) => lc(q) !== key).join('\n') }) }
@@ -263,7 +290,19 @@ function contextMenu(key) {
   }
   if (x) { if (exe && x.pin) t.push({ label: 'Yeni pencere aç', click: () => openApp(exe) }); t.push({ label: 'Kapat', click: () => x.wins.forEach((w) => wl.close(w.hwnd)) }); }
   else t.push({ label: 'Aç', click: () => openApp(exe) });
+  if (dockWin instanceof NatWin) return openDockMenu(t, key);
   Menu.buildFromTemplate(t).popup({ window: alive(dockWin) && !(dockWin instanceof NatWin) ? dockWin : undefined });
+}
+const DOCK_ICONS = { "Dock'tan kaldır": '\uE77A', "Dock'ta tut": '\uE718', 'Yeni pencere aç': '\uE8A7', 'Kapat': '\uE711', 'Aç': '\uE8A5' };
+function openDockMenu(t, key) { // Dock sağ tık menüsü: Windows menüsü yerine yerel panel (hızlı, üst menülerle aynı görünüm)
+  const k = 'dockctx' + key;
+  if (nPopKey === k) { natSend('pop', 'pop:close', true); nPopKey = ''; return; }
+  popActs = new Map(); let n = 0;
+  const data = t.map((e) => (e.type === 'separator' ? SEP : e.enabled === false ? { hd: true, label: e.label } : act('d' + ++n, e.label, e.click, { icon: DOCK_ICONS[e.label] || '' })));
+  if (Date.now() - darkAt > 5000) { readDark(); darkAt = Date.now(); }
+  const c = screen.dipToScreenPoint(screen.getCursorScreenPoint());
+  nPopKey = k;
+  natSend('pop', 'pop:open', { items: data.map(toNative), key: k, dark: !!darkNow, ax: Math.round(c.x), ay: Math.round(c.y - 40 * (display().scaleFactor || 1)) });
 }
 
 // ---------- Denetim Merkezi yardımcısı (ses/parlaklık) ----------
@@ -362,7 +401,8 @@ function dockBackdrop() { // dock'un arkası: duvar kağıdı (dock ayrılmış 
     return { ...wallBd, mode: 'cover', sw: d.bounds.width, sh: d.bounds.height, ox: 0, oy: d.bounds.height - rects().dock.height };
   } catch { return null; }
 }
-const act = (id, label, fn, o = {}) => { popActs.set(id, fn); return { id, label, ...o }; };
+const keepIds = new Set(); // tıklayınca paneli kapatmayan satırlar (aç/kapa düğmeleri)
+const act = (id, label, fn, o = {}) => { popActs.set(id, fn); if (o.keep) keepIds.add(id); return { id, label, ...o }; };
 const SEP = { sep: true };
 function confirmThen(msg, btn, fn) {
   dialog.showMessageBox({ type: 'question', buttons: ['İptal', btn], defaultId: 1, cancelId: 0, message: msg, noLink: true }).then((r) => { if (r.response === 1) fn(); });
@@ -406,7 +446,7 @@ function windowItems() {
     act('w-max', zoomed ? 'Geri Yükle' : 'Yakınlaştır', () => wl.toggleMaximize(main.hwnd)),
     act('w-close', 'Kapat', () => wl.close(main.hwnd)),
     SEP, { hd: true, label: 'Pencereler' },
-    ...g.wins.slice(0, 14).map((w, i) => act('w-' + i, w.title.length > 40 ? w.title.slice(0, 39) + '…' : w.title, () => wl.activate(w.hwnd), { checked: String(w.hwnd) === String(t.hwnd) }))
+    ...g.wins.slice(0, 14).map((w, i) => act('w-' + i, w.title.length > 40 ? w.title.slice(0, 39) + '…' : w.title, () => goActivate(w.hwnd), { checked: String(w.hwnd) === String(t.hwnd) }))
   ];
 }
 let wifiCache = null;
@@ -463,8 +503,8 @@ function popDone() {
   pop = null;
 }
 let darkAt = 0;
-const toNative = (it) => it.sep ? { sep: true } : it.hd ? { hd: true, label: it.label } : it.slider ? { slider: true, id: it.id, icon: it.icon || '', value: it.value, ch: it.ch }
-  : { id: it.id, label: it.label, icon: it.icon || '', ricon: it.ricon || '', checked: !!it.checked, dis: !!it.dis };
+const toNative = (it) => it.sep ? { sep: true } : it.media ? { media: true, label: it.label, sc: it.sc || '', value: it.value } : it.hd ? { hd: true, label: it.label } : it.slider ? { slider: true, id: it.id, icon: it.icon || '', value: it.value, ch: it.ch }
+  : { id: it.id, label: it.label, icon: it.icon || '', ricon: it.ricon || '', checked: !!it.checked, dis: !!it.dis, keep: !!it.keep };
 function ccItems() { // Denetim Merkezi: ses/parlaklık kaydırıcıları ve kısayollar
   const st = ccState(), run = (exe, args) => () => { try { spawn(exe, args, { windowsHide: true, stdio: 'ignore', detached: true }).unref(); } catch {} };
   const a = [{ slider: true, id: 'vol', icon: st.muted ? '\uE74F' : '\uE767', value: st.vol, ch: 'maccc:vol' }];
@@ -481,6 +521,8 @@ function ccItems() { // Denetim Merkezi: ses/parlaklık kaydırıcıları ve kı
     act('shot', 'Ekran Görüntüsü', () => shell.openExternal('ms-screenclip:'), { icon: '\uE722' }),
     SEP,
     act('dbset', 'Dynamic Bar Ayarları…', () => ctx.openSettings(), { icon: '\uE713' }));
+  const m = ctx.media && ctx.media(); // çalan medya en altta: başlık, sanatçı ve önceki/oynat/sonraki
+  if (m && !m.none && m.title) a.push(SEP, { media: true, label: m.title, sc: m.artist || '', value: /play/i.test(String(m.status || '')) ? 1 : 0 });
   return a;
 }
 function wifiItems(d) {
@@ -488,9 +530,47 @@ function wifiItems(d) {
   if (!d) a.push({ id: 'load', label: 'Ağlar aranıyor…', dis: true });
   else if (!d.nets.length) a.push({ id: 'none', label: 'Ağ bulunamadı', dis: true });
   else d.nets.forEach((n) => a.push({ id: n.id, label: n.ssid, icon: '\uE701', checked: n.current, ricon: n.secured && !n.current ? '\uE72E' : '' }));
-  a.push(SEP, act('settings', 'Ağ Ayarları…', () => shell.openExternal('ms-settings:network-wifi'), { icon: '\uE713' }));
+  const off = hsState === 'none';
+  a.push(SEP, act('hs', hsBusy ? 'Mobil Erişim Noktası…' : off ? 'Mobil Erişim Noktası (kullanılamıyor)' : 'Mobil Erişim Noktası', () => { if (hsBusy || hsState === 'none') return; hsBusy = true; btSend('hs ' + (hsState === 'on' ? 'off' : 'on')); refreshPanes(); }, { icon: '\uE704', checked: hsState === 'on', dis: hsBusy || off, keep: true }),
+    SEP, act('settings', 'Ağ Ayarları…', () => shell.openExternal('ms-settings:network-wifi'), { icon: '\uE713' }));
   return a;
 }
+// ---------- Bluetooth ve Mobil Erişim Noktası (scripts/bt.ps1, yalnızca paneller açılınca çalışır; boşta kapanır) ----------
+let btProc = null, btState = null, btTmp = [], hsState = null, hsBusy = false, btIdleT = null; const btBusy = new Map();
+function btStart() {
+  if (btProc || !ctx.ps) return;
+  try {
+    btProc = ctx.ps('bt.ps1'); btProc.stdin.on('error', () => {});
+    ctx.lines(btProc, (l) => {
+      if (l.startsWith('bt|')) { const p = l.split('|'); btTmp.push({ addr: p[1], conn: p[2] === '1', cls: +p[3] || 0, name: p.slice(4).join('|') }); return; }
+      if (l === 'btend') { btState = btTmp; btTmp = []; } else if (l === 'btnone') { btState = []; btTmp = []; }
+      else if (l.startsWith('hs ')) { hsState = l.slice(3); hsBusy = false; }
+      else if (l.startsWith('btc ')) { btBusy.clear(); [1500, 4500].forEach((t) => setTimeout(() => btSend('bt'), t)); }
+      else if (l.startsWith('err ')) { ctx.log('bt.ps1', l); btBusy.clear(); hsBusy = false; }
+      else return;
+      refreshPanes();
+    });
+    btProc.on('exit', () => { btProc = null; btBusy.clear(); hsBusy = false; });
+  } catch (e) { ctx.log('bt.ps1', e.message); btProc = null; }
+}
+function btSend(c) {
+  btStart(); if (btProc && btProc.stdin.writable) { try { btProc.stdin.write(c + '\n'); } catch {} }
+  clearTimeout(btIdleT); btIdleT = setTimeout(() => { try { btProc && btProc.kill(); } catch {} btProc = null; }, 150000);
+}
+const btGlyph = (c) => (c === 4 ? '\uE7F6' : c === 2 ? '\uE8EA' : c === 5 ? '\uE7FC' : '\uE702');
+function btItems() {
+  const a = [{ hd: true, label: 'Bluetooth' }];
+  if (!btState) a.push({ id: 'bload', label: 'Cihazlar aranıyor…', dis: true });
+  else if (!btState.length) a.push({ id: 'bnone', label: 'Eşleşmiş cihaz yok', dis: true });
+  else btState.forEach((d, i) => { const busy = btBusy.has(d.addr); a.push(act('b' + i, busy ? d.name + (d.conn ? ' — ayrılıyor…' : ' — bağlanıyor…') : d.name, () => { if (btBusy.has(d.addr)) return; btBusy.set(d.addr, 1); btSend('btc ' + d.addr + ' ' + (d.conn ? 0 : 1)); refreshPanes(); }, { icon: btGlyph(d.cls), checked: d.conn, dis: busy, keep: true })); });
+  a.push(SEP, act('bset', 'Bluetooth Ayarları…', () => shell.openExternal('ms-settings:bluetooth'), { icon: '\uE713' }));
+  return a;
+}
+function refreshPanes() {
+  if (nPopKey.startsWith('bt')) natSend('pop', 'pop:update', { items: btItems().map(toNative) });
+  else if (nPopKey.startsWith('wifi')) natSend('pop', 'pop:update', { items: wifiItems(wifiCache ? wifiCache.d : null).map(toNative) });
+}
+let ccPopT = null;
 function refreshCcPop() { if (nPopKey.startsWith('cc')) natSend('pop', 'pop:update', { items: ccItems().map(toNative) }); }
 function openNativePop(kind, m) { // menüler, Wi‑Fi, Denetim Merkezi: yerel (C#) açılır panel, anında açılır
   const key = kind + (m.i ?? '') + (m.label || '');
@@ -499,17 +579,18 @@ function openNativePop(kind, m) { // menüler, Wi‑Fi, Denetim Merkezi: yerel (
   lastKey = key; popActs = new Map();
   let data;
   if (kind === 'apple') data = appleItems(); else if (kind === 'app') data = appItems(); else if (kind === 'win') data = windowItems();
-  else if (kind === 'cc') { ccStart(); ccSend('get'); data = ccItems(); }
+  else if (kind === 'cc') { ccStart(); ccSend('get'); data = ccItems(); clearInterval(ccPopT); ccPopT = setInterval(() => { if (nPopKey.startsWith('cc')) refreshCcPop(); else clearInterval(ccPopT); }, 1500); }
+  else if (kind === 'bt') { data = btItems(); btSend('bt'); }
   else { // önbellekteki liste anında gösterilir, arkadan yenilenir
-    if (wifiCache) regWifi(wifiCache.d);
+    btSend('hs'); if (wifiCache) regWifi(wifiCache.d);
     data = wifiItems(wifiCache ? wifiCache.d : null);
     wifiBusy = true; wifiData().then((d) => { if (nPopKey === key) natSend('pop', 'pop:update', { items: wifiItems(d).map(toNative) }); }).catch(() => {}).finally(() => { wifiBusy = false; });
   }
   if (Date.now() - darkAt > 5000) { readDark(); darkAt = Date.now(); }
-  nPopKey = key; natSend('pop', 'pop:open', { items: data.map(toNative), key, dark: !!(kind === 'cc' ? ccState().dark : darkNow), x: m.x, w: m.w, right: kind === 'wifi' || kind === 'cc' });
+  nPopKey = key; natSend('pop', 'pop:open', { items: data.map(toNative), key, dark: !!(kind === 'cc' ? ccState().dark : darkNow), x: m.x, w: m.w, right: kind === 'wifi' || kind === 'cc' || kind === 'bt' });
 }
 async function openPop(kind, m) {
-  if (['apple', 'app', 'win', 'wifi', 'cc'].includes(kind) && menuWin instanceof NatWin) { try { return openNativePop(kind, m); } catch (e) { ctx.log('yerel panel', e.stack || e.message); return; } }
+  if (['apple', 'app', 'win', 'wifi', 'bt', 'cc'].includes(kind) && menuWin instanceof NatWin) { try { return openNativePop(kind, m); } catch (e) { ctx.log('yerel panel', e.stack || e.message); return; } }
   const view = kind === 'cc' ? 'cc' : kind === 'wifi' ? 'wifi' : 'menu', key = kind + (m.i ?? '') + (m.label || '');
   const visible = alive(popWin) && popWin.isVisible() && !!pop && !popClosing;
   if (visible && pop.key === key) return closePop();
@@ -560,7 +641,7 @@ function stop() {
   try { natSend('pop', 'pop:close', true); } catch {}
   if (timer) { clearInterval(timer); timer = null; }
   [menuWin, dockWin, popWin].forEach((w) => { if (alive(w)) w.destroy(); }); menuWin = dockWin = popWin = null; popReady = false; pop = null;
-  [ccProc, menusProc].forEach((p) => { if (p) { try { p.kill(); } catch {} } }); ccProc = menusProc = null; menusReady = false;
+  [ccProc, menusProc, btProc].forEach((p) => { if (p) { try { p.kill(); } catch {} } }); ccProc = menusProc = btProc = null; clearTimeout(btIdleT); menusReady = false;
   target = null; menuSig = '';
   menuBar.remove(); dockBar.remove();
   restoreTaskbar();
@@ -591,9 +672,10 @@ function init(c) {
     if (list.length) try { dockWin.setShape(list); } catch {}
   });
   ipcMain.on('macmenu:ready', () => { themeSig = ''; pushTheme(); menuSig = ''; pushMenus(); pushPrefs(); const b = dockBackdrop(); if (b && alive(menuWin)) menuWin.webContents.send('macdock:bd', b); });
-  ipcMain.on('macpop:nact', (_e, id) => { nPopKey = ''; const fn = popActs.get(id); if (fn) setTimeout(() => { try { fn(); } catch (e) { ctx.log('menü eylemi', e.message); } }, 80); });
-  ipcMain.on('macpop:nclosed', () => { nPopKey = ''; popHiddenAt = Date.now(); });
-  ipcMain.on('macdock:win', (_e, h) => { const n = Number(h); if (Number.isFinite(n)) { wl.activate(n); setTimeout(poll, 150); } });
+  ipcMain.on('macpop:nact', (_e, id) => { if (keepIds.has(id)) { const f = popActs.get(id); if (f) try { f(); } catch (e) { ctx.log('menü eylemi', e.message); } return; } nPopKey = ''; const fn = popActs.get(id); if (fn) setTimeout(() => { try { fn(); } catch (e) { ctx.log('menü eylemi', e.message); } }, 80); });
+  ipcMain.on('macpop:nclosed', () => { nPopKey = ''; popHiddenAt = Date.now(); clearInterval(ccPopT); });
+  ipcMain.on('maccc:media', () => setTimeout(refreshCcPop, 500));
+  ipcMain.on('macdock:win', (_e, h) => { const n = Number(h); if (Number.isFinite(n)) { goActivate(n); setTimeout(poll, 150); } });
   ipcMain.on('macdock:unpin', (_e, k) => { if (typeof k === 'string') ctx.patch({ dockPins: pins().filter((q) => lc(q) !== k).join('\n') }); });
   ipcMain.on('macdock:reorder', (_e, keys) => {
     if (!Array.isArray(keys)) return;
@@ -608,7 +690,7 @@ function init(c) {
   ipcMain.on('macmenu:open', (_e, m) => {
     if (!m || typeof m.kind !== 'string') return;
     if (m.kind === 'uia') { if (target && Number.isInteger(m.i)) menusSend('open ' + target.hwnd + ' ' + m.i); return; }
-    if (['apple', 'app', 'win', 'wifi', 'cc'].includes(m.kind)) openPop(m.kind, { x: +m.x || 0, w: +m.w || 0, i: m.i, label: String(m.label || '') });
+    if (['apple', 'app', 'win', 'wifi', 'bt', 'cc'].includes(m.kind)) openPop(m.kind, { x: +m.x || 0, w: +m.w || 0, i: m.i, label: String(m.label || '') });
   });
   ipcMain.on('macpop:ready', () => { popReady = true; });
   ipcMain.on('macpop:size', (_e, d) => { if (d && d.w > 0 && d.h > 0) placePop(Math.ceil(d.w), Math.ceil(d.h)); });

@@ -3,6 +3,7 @@
 let K = null, f = null;
 const cache = new Map(); // pid -> exe yolu
 let cacheAt = 0, acc = [];
+const vd = () => require('./vdesk');
 
 function init() {
   if (f) return true;
@@ -84,10 +85,17 @@ function collect(h) {
   if (ex & 0x80 && !(ex & 0x40000)) return; // WS_EX_TOOLWINDOW (WS_EX_APPWINDOW ise yine de göster)
   if (f.GetWindow(h, 4) && !(ex & 0x40000)) return; // sahibi olan pencere (iletişim kutuları)
   if (ex & 0x08000000 && !(ex & 0x40000)) return; // WS_EX_NOACTIVATE
-  const cl = [0]; f.DwmGetWindowAttribute(h, 14, cl, 4); if (cl[0]) return; // DWMWA_CLOAKED: başka masaüstünde ya da gizli UWP
+  const cl = [0]; f.DwmGetWindowAttribute(h, 14, cl, 4); // DWMWA_CLOAKED
+  let other = false, desk = null;
+  if (cl[0]) { // 2 = kabuk gizledi: başka sanal masaüstündeki pencere. Geçerli masaüstündeki gizli (askıya alınmış UWP) pencereler listelenmez
+    if (!(cl[0] & 2) || vd().isOnCurrent(h) !== false) return;
+    other = true; desk = vd().windowDesktop(h); if (!desk) return;
+  }
   const title = titleOf(h); if (!title || title === 'Program Manager') return;
   const exe = exeOf(pidOf(h)); if (!exe) return;
-  acc.push({ hwnd: h, title, exe, minimized: !!f.IsIconic(h) });
+  let real = null; // UWP (ApplicationFrameHost) penceresinin gerçek uygulaması: içindeki CoreWindow'un süreci
+  if (/applicationframehost\.exe$/i.test(exe)) { const c = f.FindWindowExW(h, 0, 'Windows.UI.Core.CoreWindow', null); if (c) { const re = exeOf(pidOf(c)); if (re && !/applicationframehost\.exe$/i.test(re)) real = re; } }
+  acc.push({ hwnd: h, title, exe, real, minimized: !other && !!f.IsIconic(h), other, desk });
 }
 
 // Açık pencereler, üstteki ilk (z sırası)
@@ -111,6 +119,13 @@ function activate(h) {
   if (ft && ft !== me) att = f.AttachThreadInput(me, ft, true);
   f.BringWindowToTop(h); f.SetForegroundWindow(h);
   if (att) f.AttachThreadInput(me, ft, false);
+}
+// Win+Ctrl+Sol/Sağ: Windows'un kendi kayma animasyonuyla komşu masaüstüne geçer
+function deskKey(dir) {
+  if (!init()) return;
+  const k = dir === 'left' ? 0x25 : 0x27;
+  f.keybd_event(0x5b, 0, 0, 0); f.keybd_event(0x11, 0, 0, 0); f.keybd_event(k, 0, 1, 0);
+  f.keybd_event(k, 0, 3, 0); f.keybd_event(0x11, 0, 2, 0); f.keybd_event(0x5b, 0, 2, 0);
 }
 const minimize = (h) => init() && f.ShowWindow(h, 6); // SW_MINIMIZE
 const isZoomed = (h) => init() && !!f.IsZoomed(h);
@@ -174,4 +189,4 @@ function taskbarVisible() { if (!init()) return false; const t = trays(); return
 // tema/ayar değişikliğini tüm pencerelere duyur (ör. 'ImmersiveColorSet': koyu/açık mod)
 function broadcastSetting(name) { if (!init()) return; f.SendMessageTimeoutStr(0xffff, 0x1a, 0, name, 2, 1500, [0]); }
 
-module.exports = { init, broadcastSetting, windowIcon, exeIcon, list, foreground, activate, minimize, isZoomed, toggleMaximize, restore, close, startMenu, getAutohide, setAutohide, showTaskbar, taskbarVisible };
+module.exports = { deskKey, init, broadcastSetting, windowIcon, exeIcon, list, foreground, activate, minimize, isZoomed, toggleMaximize, restore, close, startMenu, getAutohide, setAutohide, showTaskbar, taskbarVisible };

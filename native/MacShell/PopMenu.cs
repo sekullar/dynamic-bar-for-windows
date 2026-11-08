@@ -7,7 +7,7 @@ using Vortice.Mathematics;
 
 namespace MacShell;
 
-class PopItem { public string Id, Label, Icon, Sc, RIcon, Ch; public bool Sep, Hd, Checked, Dis, Slider; public float Value; }
+class PopItem { public string Id, Label, Icon, Sc, RIcon, Ch; public bool Sep, Hd, Checked, Dis, Slider, Media, Keep; public float Value; }
 
 static class WallData { public static ID2D1Bitmap1 Bmp; public static float Iw, Ih, Sw, Sh; }
 
@@ -20,7 +20,8 @@ class PopWindow : Surface
     DateTime openAt; ID2D1SolidColorBrush br; IDWriteTextFormat fmt, fmtSm, fmtIcon; ID2D1Bitmap1 glass;
     int pl, pt, pr, pb; // panelin ekran pikseli
     int anchorPx, topPx, limitPx; bool anchorRight; float scaleNow = 1;
-    const float PAD = 14, VP = 6, IH = 24, SH = 11, HH = 22, SLH = 38, SIDE = 6, RAD = 12;
+    const float PAD = 14, VP = 6, IH = 24, SH = 11, HH = 22, SLH = 38, MH = 62, SIDE = 6, RAD = 12;
+    int mediaHot = -1, mediaArm = -1; bool anchorCenter; int aboveY;
 
     public PopWindow(int x, int y, int w, int h) : base("MacShell Pop", x, y, w, h) { SetVisible(false); }
     public override bool Animating => IsOpen && (DateTime.UtcNow - openAt).TotalMilliseconds < Dur + 70;
@@ -37,9 +38,9 @@ class PopWindow : Surface
     }
     float TW(string s, IDWriteTextFormat f) { using var l = Gfx.DW.CreateTextLayout(s ?? "", f, 900, 25); return l.Metrics.WidthIncludingTrailingWhitespace; }
 
-    public void Open(List<PopItem> list, string key, bool isDark, int anchor, bool right, int top, int rightLimit, float scale)
+    public void Open(List<PopItem> list, string key, bool isDark, int anchor, bool right, int top, int rightLimit, float scale, bool center = false, int above = 0)
     {
-        Fmts(); Key = key; dark = isDark; hot = -1; armed = -1; dragSl = -1; anchorPx = anchor; anchorRight = right; topPx = top; limitPx = rightLimit; scaleNow = scale;
+        Fmts(); anchorCenter = center; aboveY = above; mediaHot = -1; mediaArm = -1; Key = key; dark = isDark; hot = -1; armed = -1; dragSl = -1; anchorPx = anchor; anchorRight = right; topPx = top; limitPx = rightLimit; scaleNow = scale;
         items = list; Rebuild();
         IsOpen = true; openAt = DateTime.UtcNow; SetVisible(true); Dirty = true;
     }
@@ -50,8 +51,8 @@ class PopWindow : Surface
         if (!IsOpen) return;
         if (dragSl >= 0 && dragSl < list.Count && dragSl < items.Count && list[dragSl].Slider) list[dragSl].Value = items[dragSl].Value;
         bool same = list.Count == items.Count;
-        for (int i = 0; same && i < list.Count; i++) same = list[i].Sep == items[i].Sep && list[i].Hd == items[i].Hd && list[i].Slider == items[i].Slider && list[i].Label == items[i].Label;
-        if (same) { for (int i = 0; i < list.Count; i++) { if (i != dragSl) items[i].Value = list[i].Value; items[i].Checked = list[i].Checked; items[i].Icon = list[i].Icon; items[i].Dis = list[i].Dis; } if (dragSl >= 0) { } Dirty = true; return; } // yerleşim aynıysa yeniden kurma (kaydırırken akıcı kalsın)
+        for (int i = 0; same && i < list.Count; i++) same = list[i].Sep == items[i].Sep && list[i].Hd == items[i].Hd && list[i].Slider == items[i].Slider && list[i].Media == items[i].Media && list[i].Label == items[i].Label && list[i].Sc == items[i].Sc;
+        if (same) { for (int i = 0; i < list.Count; i++) { if (i != dragSl) items[i].Value = list[i].Value; items[i].Checked = list[i].Checked; items[i].Icon = list[i].Icon; items[i].Dis = list[i].Dis; items[i].Keep = list[i].Keep; } if (dragSl >= 0) { } Dirty = true; return; } // yerleşim aynıysa yeniden kurma (kaydırırken akıcı kalsın)
         items = list; hot = -1; Rebuild(); Dirty = true;
     }
 
@@ -63,12 +64,14 @@ class PopWindow : Surface
             var it = items[i]; ys[i] = y;
             if (it.Sep) { y += SH; continue; }
             if (it.Slider) { y += SLH; hasSl = true; continue; }
+            if (it.Media) { y += MH; hasSl = true; continue; }
             if (it.Hd) { y += HH; mw = Math.Max(mw, TW(it.Label, fmtSm) + 24); continue; }
             y += IH; mw = Math.Max(mw, TW(it.Label, fmt) + 24 + 24 + 14 + (string.IsNullOrEmpty(it.Sc) ? 0 : TW(it.Sc, fmt) + 28) + (string.IsNullOrEmpty(it.RIcon) && !(it.Checked && !string.IsNullOrEmpty(it.Icon)) ? 0 : 22));
         }
         pw = Math.Max(hasSl ? 270 : 210, mw + SIDE * 2); ph = y + VP;
         int wpx = (int)MathF.Ceiling((pw + PAD * 2) * scale), hpx = (int)MathF.Ceiling((ph + PAD * 2) * scale);
-        int lp = anchorRight ? anchorPx - (int)(pw * scale) + (int)(4 * scale) : anchorPx;
+        if (aboveY > 0) topPx = Math.Max(0, aboveY - (int)(ph * scale)); // dock menüsü: alt kenar dock'un üstünde
+        int lp = anchorCenter ? anchorPx - (int)(pw * scale / 2) : anchorRight ? anchorPx - (int)(pw * scale) + (int)(4 * scale) : anchorPx;
         lp = Math.Min(lp, limitPx - (int)(pw * scale) - (int)(8 * scale)); lp = Math.Max(lp, 0);
         pl = lp; pt = topPx; pr = lp + (int)(pw * scale); pb = topPx + (int)(ph * scale);
         SetBounds(lp - (int)(PAD * scale), topPx - (int)(PAD * scale), wpx, hpx, scale);
@@ -114,6 +117,7 @@ class PopWindow : Surface
             var it = items[i]; float y = PAD + ys[i];
             if (it.Sep) { br.Color = dark ? new Color4(1, 1, 1, .16f * a) : new Color4(0, 0, 0, .13f * a); Dc.FillRectangle(new RawRectF(r.Left + 10, y + SH / 2, r.Right - 10, y + SH / 2 + 1), br); continue; }
             if (it.Slider) { DrawSlider(it, r, y, fg, a); continue; }
+            if (it.Media) { DrawMedia(it, r, y, fg, a); continue; }
             if (it.Hd)
             {
                 using var hl = Gfx.DW.CreateTextLayout(it.Label ?? "", fmtSm, pw, 20); br.Color = new Color4(fg.R, fg.G, fg.B, .5f * a);
@@ -145,6 +149,34 @@ class PopWindow : Surface
         Dc.Transform = Matrix3x2.Identity;
     }
 
+    float MediaX0() => PAD + pw - SIDE - 8 - 3 * 32;
+    int MediaHit(float x, float y)
+    {
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (!items[i].Media) continue;
+            if (y < PAD + ys[i] || y > PAD + ys[i] + MH || x < MediaX0() || x > MediaX0() + 96) return -1;
+            return Math.Min(2, (int)((x - MediaX0()) / 32));
+        }
+        return -1;
+    }
+    void DrawMedia(PopItem it, RawRectF r, float y, Color4 fg, float a)
+    {
+        float cy = y + MH / 2, x0 = MediaX0(), tx = r.Left + SIDE + 12;
+        Dc.PushAxisAlignedClip(new RawRectF(tx, y, x0 - 4, y + MH), AntialiasMode.Aliased);
+        using (var tl = Gfx.DW.CreateTextLayout(it.Label ?? "", fmt, 1000, 24)) { br.Color = new Color4(fg.R, fg.G, fg.B, fg.A * a); Dc.DrawTextLayout(new Vector2(tx, cy - 19), tl, br); }
+        using (var al = Gfx.DW.CreateTextLayout(string.IsNullOrEmpty(it.Sc) ? "Şu an çalıyor" : it.Sc, fmtSm, 1000, 20)) { br.Color = new Color4(fg.R, fg.G, fg.B, .55f * a); Dc.DrawTextLayout(new Vector2(tx, cy + 3), al, br); }
+        Dc.PopAxisAlignedClip();
+        string[] g = { "\uE892", it.Value > .5f ? "\uE769" : "\uE768", "\uE893" };
+        for (int k = 0; k < 3; k++)
+        {
+            float bx = x0 + k * 32;
+            if (mediaHot == k) { br.Color = dark ? new Color4(1, 1, 1, .14f * a) : new Color4(0, 0, 0, .10f * a); Dc.FillRoundedRectangle(new RoundedRectangle(new RawRectF(bx + 1, cy - 14, bx + 31, cy + 14), 7, 7), br); }
+            using var il = Gfx.DW.CreateTextLayout(g[k], fmtIcon, 30, 24); br.Color = new Color4(fg.R, fg.G, fg.B, fg.A * a);
+            Dc.DrawTextLayout(new Vector2(bx + (32 - il.Metrics.Width) / 2, cy - il.Metrics.Height / 2), il, br);
+        }
+    }
+
     (float L, float R) TrackX() => (PAD + SIDE + 40, PAD + pw - SIDE - 14);
     void DrawSlider(PopItem it, RawRectF r, float y, Color4 fg, float a)
     {
@@ -163,7 +195,7 @@ class PopWindow : Surface
     int HitIdx(float x, float y)
     {
         if (x < PAD + SIDE || x > PAD + pw - SIDE) return -1;
-        for (int i = 0; i < items.Count; i++) { if (items[i].Sep || items[i].Hd || items[i].Slider) continue; if (y >= PAD + ys[i] && y < PAD + ys[i] + IH) return i; }
+        for (int i = 0; i < items.Count; i++) { if (items[i].Sep || items[i].Hd || items[i].Slider || items[i].Media) continue; if (y >= PAD + ys[i] && y < PAD + ys[i] + IH) return i; }
         return -1;
     }
     int SliderAt(float y) { for (int i = 0; i < items.Count; i++) if (items[i].Slider && y >= PAD + ys[i] && y < PAD + ys[i] + SLH) return i; return -1; }
@@ -185,20 +217,25 @@ class PopWindow : Surface
                 {
                     float x = N.Lo(l) / Scale, y = N.Hi(l) / Scale;
                     if (dragSl >= 0) { Slide(dragSl, x); return IntPtr.Zero; }
-                    int h = HitIdx(x, y); if (h != hot) { hot = h; Dirty = true; } Track(); return IntPtr.Zero;
+                    int h = HitIdx(x, y); if (h != hot) { hot = h; Dirty = true; }
+                    int mh = MediaHit(x, y); if (mh != mediaHot) { mediaHot = mh; Dirty = true; }
+                    Track(); return IntPtr.Zero;
                 }
-            case N.WM_MOUSELEAVE: Untrack(); if (hot != -1) { hot = -1; Dirty = true; } return IntPtr.Zero;
+            case N.WM_MOUSELEAVE: Untrack(); if (hot != -1 || mediaHot != -1) { hot = -1; mediaHot = -1; Dirty = true; } return IntPtr.Zero;
             case N.WM_LBUTTONDOWN:
                 {
                     float x = N.Lo(l) / Scale, y = N.Hi(l) / Scale; int s = SliderAt(y);
                     if (s >= 0) { dragSl = s; N.SetCapture(Hwnd); Slide(s, x); return IntPtr.Zero; }
-                    armed = HitIdx(x, y); return IntPtr.Zero;
+                    mediaArm = MediaHit(x, y); armed = HitIdx(x, y); return IntPtr.Zero;
                 }
             case N.WM_LBUTTONUP:
                 {
                     if (dragSl >= 0) { dragSl = -1; N.ReleaseCapture(); return IntPtr.Zero; }
+                    int mk = MediaHit(N.Lo(l) / Scale, N.Hi(l) / Scale);
+                    if (mk >= 0 && mk == mediaArm) { Emit?.Invoke("maccc:media", mk == 0 ? "prev" : mk == 1 ? "playpause" : "next"); mediaArm = -1; return IntPtr.Zero; }
+                    mediaArm = -1;
                     int h = HitIdx(N.Lo(l) / Scale, N.Hi(l) / Scale);
-                    if (h >= 0 && h == armed && !items[h].Dis && items[h].Id != null) { string id = items[h].Id; Close(); Emit?.Invoke("macpop:nact", id); }
+                    if (h >= 0 && h == armed && !items[h].Dis && items[h].Id != null) { string id = items[h].Id; if (!items[h].Keep) Close(); Emit?.Invoke("macpop:nact", id); }
                     armed = -1; return IntPtr.Zero;
                 }
             case N.WM_ERASEBKGND: return (IntPtr)1;

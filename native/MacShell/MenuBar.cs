@@ -64,6 +64,7 @@ class MenuWindow : Surface
         if (rx - 32 >= minX) { rx -= 32; btns.Add(new Btn("cc", rx, 32, "cc", 0, "")); }
         if (batPct >= 0) { float bw = TextW(batPct + "%", false) + 5 + 27 + 16; if (rx - bw >= minX) { rx -= bw; btns.Add(new Btn("bat", rx, bw, "bat", 0, "")); } }
         if (rx - 34 >= minX) { rx -= 34; btns.Add(new Btn("wifi", rx, 34, "wifi", 0, "")); }
+        if (rx - 28 >= minX) { rx -= 28; btns.Add(new Btn("bt", rx, 28, "bt", 0, "")); }
         if (rx - 28 >= minX) { rx -= 28; btns.Add(new Btn("tray", rx, 28, "tray", 0, "")); }
     }
 
@@ -103,6 +104,7 @@ class MenuWindow : Surface
             {
                 case "start": WinLogo(cx, cy, fg); break;
                 case "tray": Tray(cx, cy, fg); break;
+                case "bt": Bluetooth(cx, cy, fg); break;
                 case "wifi": Wifi(cx, cy, fg, shadowC, online ? 1f : .45f); break;
                 case "cc": Cc(cx, cy, fg, shadowC); break;
                 case "bat": Battery(b, fg); break;
@@ -113,6 +115,12 @@ class MenuWindow : Surface
         Dc.Transform = Tb;
     }
 
+    void Bluetooth(float cx, float cy, Color4 fg)
+    {
+        float x = cx - 3.5f, y = cy - 7.5f; br.Color = fg;
+        Vector2[] p = { new(x + 0, y + 4.5f), new(x + 7, y + 11), new(x + 3.5f, y + 14.5f), new(x + 3.5f, y + 0.5f), new(x + 7, y + 4), new(x + 0, y + 10.5f) };
+        for (int i = 0; i < p.Length - 1; i++) Dc.DrawLine(p[i], p[i + 1], br, 1.4f, round);
+    }
     void Tray(float cx, float cy, Color4 fg)
     {
         br.Color = fg; Dc.DrawLine(new Vector2(cx - 4, cy + 2), new Vector2(cx, cy - 2), br, 1.6f, round); Dc.DrawLine(new Vector2(cx, cy - 2), new Vector2(cx + 4, cy + 2), br, 1.6f, round);
@@ -188,7 +196,7 @@ class MenuWindow : Surface
     {
         if (!PopOpen || hot < 0 || hot >= btns.Count) return; var b = btns[hot];
         if (b.Kind == "hm" && openId != b.Id) { openId = b.Id; OpenHm?.Invoke(b.I, b.X, b.W, b.Label); return; }
-        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win" || b.Kind == "wifi" || b.Kind == "cc") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
+        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win" || b.Kind == "wifi" || b.Kind == "bt" || b.Kind == "cc") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
     }
     protected override IntPtr Msg(uint m, IntPtr w, IntPtr l, out bool handled)
     {

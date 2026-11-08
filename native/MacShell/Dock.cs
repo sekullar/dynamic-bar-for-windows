@@ -22,7 +22,7 @@ class DockWindow : Surface
 {
     public List<DockItem> Items = new();
     public float Size = 40; public Action<string, object> Emit;
-    public bool AutoHide, PreviewOn = true;
+    public bool AutoHide, PreviewOn = true; public Func<bool> Blocked; // Blocked: bağlam menüsü açıkken pencere önizlemesi çıkmasın
     float peak = .40f, springK = .13f, springD = .78f, spread = 1.35f, tipK = .28f, prevK = .3f;
     public void SetAnim(string a)
     {
@@ -106,7 +106,7 @@ class DockWindow : Surface
             vel[i] = (vel[i] + (target - cur[i]) * springK) * springD; cur[i] += vel[i];
             if (MathF.Abs(target - cur[i]) > .002f || MathF.Abs(vel[i]) > .002f) busy = true; else cur[i] = target;
         }
-        float tgt = (mag && hoverIdx >= 0 && prevIdx < 0) ? 1 : 0; float p0 = tipA; tipA += (tgt - tipA) * tipK; if (MathF.Abs(tgt - tipA) < .01f) tipA = tgt; if (tipA != p0) busy = true;
+        float tgt = (mag && hoverIdx >= 0 && prevIdx < 0 && !(Blocked?.Invoke() ?? false)) ? 1 : 0; float p0 = tipA; tipA += (tgt - tipA) * tipK; if (MathF.Abs(tgt - tipA) < .01f) tipA = tgt; if (tipA != p0) busy = true;
         // slot kaydırma (sürüklerken komşular yer açar)
         for (int i = 0; i < Items.Count && i < dx.Length; i++)
         {
@@ -359,7 +359,7 @@ class DockWindow : Surface
     }
     void PreviewLogic(Vector2 c, DateTime now, float oy)
     {
-        if (!PreviewOn) { if (prevIdx >= 0) ClosePreview(); return; }
+        if (!PreviewOn || (Blocked?.Invoke() ?? false)) { if (prevIdx >= 0) ClosePreview(); cand = -1; return; }
         if (prevIdx >= 0)
         {
             bool inside = InPanelArea(c.X, c.Y - oy) || (hov && hoverIdx == prevIdx);
@@ -437,7 +437,7 @@ class DockWindow : Surface
                     dragging = false; dragIdx = -1; dragTarget = -1; pressIdx = -1; Dirty = true; return IntPtr.Zero;
                 }
             case N.WM_RBUTTONUP:
-                { int i = HitItem(N.Lo(l) / Scale, N.Hi(l) / Scale); if (i >= 0) Emit?.Invoke("macdock:menu", Items[i].Key); return IntPtr.Zero; }
+                { int i = HitItem(N.Lo(l) / Scale, N.Hi(l) / Scale); if (i >= 0) { ClosePreview(); cand = -1; Emit?.Invoke("macdock:menu", Items[i].Key); } return IntPtr.Zero; }
             case N.WM_ERASEBKGND: return (IntPtr)1;
         }
         handled = false; return IntPtr.Zero;

@@ -26,6 +26,7 @@ static class Program
         N.timeBeginPeriod(1);
         stdout = new StreamWriter(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false)) { AutoFlush = true };
         string fontDir = Path.Combine(AppContext.BaseDirectory, "fonts");
+        AppDomain.CurrentDomain.UnhandledException += (s, e) => { Emit("native:error", "CRASH: " + e.ExceptionObject); Thread.Sleep(200); };
         Gfx.Init(fontDir); Surface.OnError = (m) => Emit("native:error", m);
         new Thread(ReadStdin) { IsBackground = true }.Start();
         Emit("native:ready", new { });
@@ -51,7 +52,7 @@ static class Program
     {
         var li = new List<PopItem>();
         foreach (var e in d.GetProperty("items").EnumerateArray())
-            li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), RIcon = Str(e, "ricon"), Ch = Str(e, "ch"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis"), Slider = Bool(e, "slider"), Value = Num(e, "value") });
+            li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), RIcon = Str(e, "ricon"), Ch = Str(e, "ch"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis"), Slider = Bool(e, "slider"), Media = Bool(e, "media"), Keep = Bool(e, "keep"), Sc = Str(e, "sc"), Value = Num(e, "value") });
         return li;
     }
     static void EnsurePop()
@@ -111,6 +112,13 @@ static class Program
             return;
         }
         if (ch == "pop:close") { if (pop != null && pop.IsOpen) pop.Close(); else Emit("macpop:nclosed", null); return; }
+        if (ch == "pop:open" && d.TryGetProperty("ax", out _)) // Dock bağlam menüsü: imlecin üstünde, alt kenarı dock'un üstünde
+        {
+            Surface s = (Surface)dock ?? menu; if (s == null) return;
+            EnsurePop(); darkNow = Bool(d, "dark");
+            pop.Open(ParseItems(d), Str(d, "key") ?? "", darkNow, (int)Num(d, "ax"), false, 0, s.PxX + s.PxW, s.Scale, true, (int)Num(d, "ay"));
+            return;
+        }
         if (ch == "pop:open")
         {
             if (menu == null) return;
@@ -135,7 +143,7 @@ static class Program
             }
             else if (w == "dock")
             {
-                if (dock == null) { dock = new DockWindow(x, y, pw, ph) { Emit = Emit }; dock.SetBounds(x, y, pw, ph, sc); if (WallData.Bmp != null) dock.SetWall(WallData.Bmp, wallHash.ToString(), WallData.Iw, WallData.Ih, WallData.Sw, WallData.Sh, 0, y / sc); Emit("macdock:ready", null); }
+                if (dock == null) { dock = new DockWindow(x, y, pw, ph) { Emit = Emit, Blocked = () => pop != null && pop.IsOpen }; dock.SetBounds(x, y, pw, ph, sc); if (WallData.Bmp != null) dock.SetWall(WallData.Bmp, wallHash.ToString(), WallData.Iw, WallData.Ih, WallData.Sw, WallData.Sh, 0, y / sc); Emit("macdock:ready", null); }
                 else dock.SetBounds(x, y, pw, ph, sc);
                 Report();
             }
