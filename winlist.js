@@ -4,6 +4,7 @@ let K = null, f = null;
 const cache = new Map(); // pid -> exe yolu
 let cacheAt = 0, acc = [];
 const vd = () => require('./vdesk');
+const realCache = new Map(); // hwnd -> UWP uygulamasının gerçek exe yolu
 
 function init() {
   if (f) return true;
@@ -95,6 +96,10 @@ function collect(h) {
   const exe = exeOf(pidOf(h)); if (!exe) return;
   let real = null; // UWP (ApplicationFrameHost) penceresinin gerçek uygulaması: içindeki CoreWindow'un süreci
   if (/applicationframehost\.exe$/i.test(exe)) { const c = f.FindWindowExW(h, 0, 'Windows.UI.Core.CoreWindow', null); if (c) { const re = exeOf(pidOf(c)); if (re && !/applicationframehost\.exe$/i.test(re)) real = re; } }
+  if (/applicationframehost\.exe$/i.test(exe)) { // küçültülünce CoreWindow kaybolur: önceki bulguyu hatırla; Ayarlar için ada göre yedek
+    if (real) { if (realCache.size > 300) realCache.clear(); realCache.set(h, real); }
+    else real = realCache.get(h) || (/^(ayarlar|settings)$/i.test(title) ? 'C:/Windows/ImmersiveControlPanel/SystemSettings.exe' : null);
+  }
   acc.push({ hwnd: h, title, exe, real, minimized: !other && !!f.IsIconic(h), other, desk });
 }
 
