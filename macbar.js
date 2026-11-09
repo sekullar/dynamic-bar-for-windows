@@ -544,7 +544,7 @@ function popDone() {
   pop = null;
 }
 let darkAt = 0;
-const toNative = (it) => it.sep ? { sep: true } : it.media ? { media: true, label: it.label, sc: it.sc || '', value: it.value } : it.hd ? { hd: true, label: it.label } : it.slider ? { slider: true, id: it.id, icon: it.icon || '', value: it.value, ch: it.ch }
+const toNative = (it) => it.sep ? { sep: true } : it.cal ? { cal: true } : it.media ? { media: true, label: it.label, sc: it.sc || '', value: it.value } : it.hd ? { hd: true, label: it.label } : it.slider ? { slider: true, id: it.id, icon: it.icon || '', value: it.value, ch: it.ch }
   : { id: it.id, label: it.label, icon: it.icon || '', ricon: it.ricon || '', checked: !!it.checked, dis: !!it.dis, keep: !!it.keep, img: it.img || '', rc: !!it.rc };
 function ccItems() { // Denetim Merkezi: ses/parlaklık kaydırıcıları ve kısayollar
   const st = ccState(), run = (exe, args) => () => { try { spawn(exe, args, { windowsHide: true, stdio: 'ignore', detached: true }).unref(); } catch {} };
@@ -645,7 +645,7 @@ function trStart() {
   try {
     trProc = ctx.ps('tray.ps1'); trProc.stdin.on('error', () => {});
     ctx.lines(trProc, (l) => {
-      if (l.startsWith('tray|')) { const p = l.split('|'); trTmp.push({ exe: p[1], name: p.slice(2).join('|') }); return; }
+      if (l.startsWith('tray|')) { const p = l.split('|'); trTmp.push({ exe: p[1], promoted: p[2] === '1', name: p.slice(3).join('|') }); return; }
       if (l !== 'trayend') return;
       trList = trTmp; trTmp = []; trList.forEach((t) => fetchIcon(lc(t.exe), t.exe)); refreshPanes(); setTimeout(refreshPanes, 500);
     });
@@ -667,14 +667,19 @@ function trcStart() { // betik önceden başlatılır (PowerShell + UI Automatio
   if (trcProc) return;
   try {
     trcProc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ctx.unpacked(path.join(__dirname, 'scripts', 'trayclick.ps1'))], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    ctx.lines(trcProc, (l) => { if (l !== 'ready') ctx.log('trayclick', l); });
+    ctx.lines(trcProc, (l) => {
+      if (l === 'ready') { trNamesAt = Date.now(); setTimeout(refreshPanes, 4100); try { trcProc.stdin.write('names' + String.fromCharCode(10)); } catch {} return; } // simge adlarını hemen iste
+      if (l.startsWith('names|')) { trNames = l.split('|').slice(1).filter(Boolean); refreshPanes(); return; }
+      ctx.log('trayclick', l);
+    });
     trcProc.stdin.on('error', () => {}); trcProc.on('error', () => {}); const me = trcProc; trcProc.on('exit', () => { if (trcProc === me) trcProc = null; });
   } catch (e) { ctx.log('tepsi sağ tık', e.message); trcProc = null; }
   clearTimeout(trcIdleT); trcIdleT = setTimeout(trcStop, 60000);
 }
 function trayContext(t) { // Windows'un gizli simgeler panelinde ilgili simgeye sağ tık: uygulamanın kendi menüsü imlecin olduğu yerde açılır
   const w = wl.list().find((x) => lc(x.exe) === lc(t.exe) && x.title);
-  const names = [t.name, path.win32.basename(t.exe, '.exe'), w && w.title].filter(Boolean).join('|').replace(/\s+/g, ' ');
+  const dir = path.win32.basename(path.win32.dirname(t.exe)); // "Riot Vanguard" gibi: simgenin paneldeki adı çoğu zaman klasör adıdır
+  const names = [t.name, path.win32.basename(t.exe, '.exe'), dir.length >= 4 ? dir : '', w && w.title].filter(Boolean).join('|').replace(/\s+/g, ' ');
   trcStart(); try { trcProc.stdin.write(names + String.fromCharCode(10)); } catch {}
   clearTimeout(trcIdleT); trcIdleT = setTimeout(trcStop, 60000);
 }
@@ -682,10 +687,21 @@ function trayOpen(t) { // uygulamanın penceresi varsa öne al, yoksa uygulamay�
   const w = wl.list().filter((x) => lc(x.exe) === lc(t.exe) && x.title).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
   if (w) goActivate(w.hwnd); else shell.openPath(t.exe).catch(() => {});
 }
+let trNames = null, trNamesAt = 0; // Windows'un gizli simgeler panelindeki simge adları (önbellek; panel her açılışta yenilenir)
+const trCands = (t) => { const d = path.win32.basename(path.win32.dirname(t.exe)); return [t.name, path.win32.basename(t.exe, '.exe'), d.length >= 4 ? d : ''].filter(Boolean).map((x) => x.toLowerCase().trim()); };
+const TR_GENERIC = new Set(['tray', 'client', 'windows', 'service', 'services', 'notification', 'notifications', 'helper', 'update', 'launcher']);
+function trNameMatch(t, btn) { // trayclick.ps1 ile aynı mantık: tam eşleşme, kapsama (≥4 harf), ayırt edici sözcük
+  const b = String(btn).toLowerCase().trim(); if (b.length < 3) return false; const c = trCands(t);
+  if (c.includes(b)) return true;
+  if (c.some((x) => x.length >= 4 && b.length >= 4 && (b.includes(x) || x.includes(b)))) return true;
+  return c.some((x) => x.split(/[^\p{L}\p{N}]+/u).some((k) => k.length >= 5 && !TR_GENERIC.has(k) && b.includes(k)));
+}
 function trayItems() {
   const a = [{ hd: true, label: 'Sistem tepsisi' }];
   if (!trList) return [...a, { id: 'trl', label: 'Okunuyor…', dis: true }];
-  const list = trList.filter((t) => lc(t.exe) !== lc(process.execPath));
+  if (!trNames && Date.now() - trNamesAt < 4000) return [...a, { id: 'trl', label: 'Okunuyor…', dis: true }];
+  // yalnızca gerçekten tepside olanlar: görev çubuğuna sabitli (promoted) simgeler ya da gizli simgeler panelinde adı eşleşenler
+  const list = trList.filter((t) => lc(t.exe) !== lc(process.execPath) && (!trNames || t.promoted || trNames.some((b) => trNameMatch(t, b))));
   if (!list.length) a.push({ id: 'trn', label: 'Tepsi uygulaması yok', dis: true });
   list.slice(0, 18).forEach((t, i) => { rcActs.set('t' + i, () => trayContext(t)); a.push(act('t' + i, t.name, () => trayOpen(t), { rc: true,  img: icons.get(lc(t.exe)) || '', icon: icons.get(lc(t.exe)) ? '' : '\uE71D' })); });
   a.push(SEP, act('twin', 'Windows gizli simgeler…', () => { try { natSend('menu', 'menu:tray', true); } catch {} }, { icon: '\uE713' }));
@@ -709,17 +725,18 @@ function openNativePop(kind, m) { // menüler, Wi‑Fi, Denetim Merkezi: yerel (
   else if (kind === 'cc') { ccStart(); ccSend('get'); data = ccItems(); clearInterval(ccPopT); ccPopT = setInterval(() => { if (nPopKey.startsWith('cc')) refreshCcPop(); else clearInterval(ccPopT); }, 1500); }
   else if (kind === 'bt') { data = btItems(); btSend('bt'); }
   else if (kind === 'bat') { data = batItems(); pwrSend('get'); }
-  else if (kind === 'tray') { data = trayItems(); trSend('list'); trcStart(); }
+  else if (kind === 'tray') { data = trayItems(); trNamesAt = Date.now(); setTimeout(refreshPanes, 4100); trSend('list'); if (trcProc) { try { trcProc.stdin.write('names' + String.fromCharCode(10)); } catch {} } trcStart(); }
+  else if (kind === 'clock') data = [{ cal: true }, { sep: true }, act('clkpanel', 'Dynamic Bar panelini aç', () => ctx.panel(), { icon: '' })];
   else { // önbellekteki liste anında gösterilir, arkadan yenilenir
     btSend('hs'); if (wifiCache) regWifi(wifiCache.d);
     data = wifiItems(wifiCache ? wifiCache.d : null);
     wifiBusy = true; wifiData().then((d) => { if (nPopKey === key) natSend('pop', 'pop:update', { items: wifiItems(d).map(toNative) }); }).catch(() => {}).finally(() => { wifiBusy = false; });
   }
   if (Date.now() - darkAt > 5000) { readDark(); darkAt = Date.now(); }
-  nPopKey = key; natSend('pop', 'pop:open', { items: data.map(toNative), key, dark: !!(kind === 'cc' ? ccState().dark : darkNow), x: m.x, w: m.w, right: kind === 'wifi' || kind === 'cc' || kind === 'bt' || kind === 'bat' || kind === 'tray' });
+  nPopKey = key; natSend('pop', 'pop:open', { items: data.map(toNative), key, dark: !!(kind === 'cc' ? ccState().dark : darkNow), x: m.x, w: m.w, right: kind === 'wifi' || kind === 'cc' || kind === 'bt' || kind === 'bat' || kind === 'tray' || kind === 'clock' });
 }
 async function openPop(kind, m) {
-  if (['apple', 'app', 'win', 'wifi', 'bt', 'bat', 'tray', 'cc'].includes(kind) && menuWin instanceof NatWin) { try { return openNativePop(kind, m); } catch (e) { ctx.log('yerel panel', e.stack || e.message); return; } }
+  if (['apple', 'app', 'win', 'wifi', 'bt', 'bat', 'tray', 'clock', 'cc'].includes(kind) && menuWin instanceof NatWin) { try { return openNativePop(kind, m); } catch (e) { ctx.log('yerel panel', e.stack || e.message); return; } }
   const view = kind === 'cc' ? 'cc' : kind === 'wifi' ? 'wifi' : 'menu', key = kind + (m.i ?? '') + (m.label || '');
   const visible = alive(popWin) && popWin.isVisible() && !!pop && !popClosing;
   if (visible && pop.key === key) return closePop();
@@ -826,7 +843,7 @@ function init(c) {
   ipcMain.on('macmenu:open', (_e, m) => {
     if (!m || typeof m.kind !== 'string') return;
     if (m.kind === 'uia') { if (target && Number.isInteger(m.i)) menusSend('open ' + target.hwnd + ' ' + m.i); return; }
-    if (['apple', 'app', 'win', 'wifi', 'bt', 'bat', 'tray', 'cc'].includes(m.kind)) openPop(m.kind, { x: +m.x || 0, w: +m.w || 0, i: m.i, label: String(m.label || '') });
+    if (['apple', 'app', 'win', 'wifi', 'bt', 'bat', 'tray', 'clock', 'cc'].includes(m.kind)) openPop(m.kind, { x: +m.x || 0, w: +m.w || 0, i: m.i, label: String(m.label || '') });
   });
   ipcMain.on('macpop:ready', () => { popReady = true; });
   ipcMain.on('macpop:size', (_e, d) => { if (d && d.w > 0 && d.h > 0) placePop(Math.ceil(d.w), Math.ceil(d.h)); });

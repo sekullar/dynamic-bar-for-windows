@@ -7,7 +7,7 @@ using Vortice.Mathematics;
 
 namespace MacShell;
 
-class PopItem { public string Id, Label, Icon, Sc, RIcon, Ch, Img; public bool Sep, Hd, Checked, Dis, Slider, Media, Keep, Rc; public float Value; }
+class PopItem { public string Id, Label, Icon, Sc, RIcon, Ch, Img; public bool Sep, Hd, Checked, Dis, Slider, Media, Keep, Rc, Cal; public float Value; }
 
 static class WallData { public static ID2D1Bitmap1 Bmp; public static float Iw, Ih, Sw, Sh; }
 
@@ -20,7 +20,9 @@ class PopWindow : Surface
     readonly Dictionary<string, ID2D1Bitmap1> imgs = new(); DateTime openAt; ID2D1SolidColorBrush br; IDWriteTextFormat fmt, fmtSm, fmtIcon; ID2D1Bitmap1 glass;
     int pl, pt, pr, pb; // panelin ekran pikseli
     int anchorPx, topPx, limitPx; bool anchorRight; float scaleNow = 1;
-    const float PAD = 14, VP = 6, IH = 24, SH = 11, HH = 22, SLH = 38, MH = 62, SIDE = 6, RAD = 12;
+    const float PAD = 14, VP = 6, IH = 24, SH = 11, HH = 22, SLH = 38, MH = 62, SIDE = 6, RAD = 12, CALH = 292;
+    DateTime calMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1), calSel = DateTime.Today; int calHot = -1, calArm = -1;
+    static readonly System.Globalization.CultureInfo Tr = new("tr-TR");
     int mediaHot = -1, mediaArm = -1; bool anchorCenter; int aboveY;
 
     public PopWindow(int x, int y, int w, int h) : base("MacShell Pop", x, y, w, h) { SetVisible(false); }
@@ -41,7 +43,7 @@ class PopWindow : Surface
     public void Open(List<PopItem> list, string key, bool isDark, int anchor, bool right, int top, int rightLimit, float scale, bool center = false, int above = 0)
     {
         Fmts(); anchorCenter = center; aboveY = above; mediaHot = -1; mediaArm = -1; Key = key; dark = isDark; hot = -1; armed = -1; dragSl = -1; anchorPx = anchor; anchorRight = right; topPx = top; limitPx = rightLimit; scaleNow = scale;
-        items = list; Rebuild();
+        items = list; calMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1); calSel = DateTime.Today; calHot = -1; calArm = -1; Rebuild();
         IsOpen = true; openAt = DateTime.UtcNow; SetVisible(true); Dirty = true;
     }
 
@@ -58,17 +60,18 @@ class PopWindow : Surface
 
     void Rebuild()
     {
-        float scale = scaleNow, mw = 0, y = VP; ys = new float[items.Count]; bool hasSl = false;
+        float scale = scaleNow, mw = 0, y = VP; ys = new float[items.Count]; bool hasSl = false, hasCal = false;
         for (int i = 0; i < items.Count; i++)
         {
             var it = items[i]; ys[i] = y;
             if (it.Sep) { y += SH; continue; }
+            if (it.Cal) { y += CALH; hasCal = true; continue; }
             if (it.Slider) { y += SLH; hasSl = true; continue; }
             if (it.Media) { y += MH; hasSl = true; continue; }
             if (it.Hd) { y += HH; mw = Math.Max(mw, TW(it.Label, fmtSm) + 24); continue; }
             y += IH; mw = Math.Max(mw, TW(it.Label, fmt) + 24 + 24 + 14 + (string.IsNullOrEmpty(it.Sc) ? 0 : TW(it.Sc, fmt) + 28) + (string.IsNullOrEmpty(it.RIcon) && !(it.Checked && !string.IsNullOrEmpty(it.Icon)) ? 0 : 22));
         }
-        pw = Math.Max(hasSl ? 270 : 210, mw + SIDE * 2); ph = y + VP;
+        pw = Math.Max(hasCal ? 312 : hasSl ? 270 : 210, mw + SIDE * 2); ph = y + VP;
         int wpx = (int)MathF.Ceiling((pw + PAD * 2) * scale), hpx = (int)MathF.Ceiling((ph + PAD * 2) * scale);
         if (aboveY > 0) topPx = Math.Max(0, aboveY - (int)(ph * scale)); // dock menüsü: alt kenar dock'un üstünde
         int lp = anchorCenter ? anchorPx - (int)(pw * scale / 2) : anchorRight ? anchorPx - (int)(pw * scale) + (int)(4 * scale) : anchorPx;
@@ -116,6 +119,7 @@ class PopWindow : Surface
         {
             var it = items[i]; float y = PAD + ys[i];
             if (it.Sep) { br.Color = dark ? new Color4(1, 1, 1, .16f * a) : new Color4(0, 0, 0, .13f * a); Dc.FillRectangle(new RawRectF(r.Left + 10, y + SH / 2, r.Right - 10, y + SH / 2 + 1), br); continue; }
+            if (it.Cal) { DrawCal(r, y, fg, a); continue; }
             if (it.Slider) { DrawSlider(it, r, y, fg, a); continue; }
             if (it.Media) { DrawMedia(it, r, y, fg, a); continue; }
             if (it.Hd)
@@ -152,6 +156,48 @@ class PopWindow : Surface
             }
         }
         Dc.Transform = Matrix3x2.Identity;
+    }
+
+
+    // ---- takvim ----
+    const float CHEAD = 40, CWD = 22, CROW = 38, CPADX = 12;
+    int CalIdx() { for (int i = 0; i < items.Count; i++) if (items[i].Cal) return i; return -1; }
+    (float X, float Y, float Cw) CalBox(int ci) { float gw = pw - 2 * (SIDE + CPADX); return (PAD + SIDE + CPADX, PAD + ys[ci], gw / 7); }
+    int CalHit(float x, float y)
+    {
+        int ci = CalIdx(); if (ci < 0) return -1; var (bx, by, cw) = CalBox(ci); float gr = bx + cw * 7;
+        if (y >= by + 4 && y <= by + CHEAD - 4)
+        {
+            if (x >= gr - 28 && x <= gr) return 102; if (x >= gr - 28 - 58 && x < gr - 28) return 101; if (x >= gr - 28 - 58 - 28 && x < gr - 28 - 58) return 100; return -1;
+        }
+        float gy = by + CHEAD + CWD; if (y < gy || y >= gy + CROW * 6 || x < bx || x >= gr) return -1;
+        return (int)((y - gy) / CROW) * 7 + (int)((x - bx) / cw);
+    }
+    void CT(string s, IDWriteTextFormat f, float cx, float cy, Color4 c) { using var l = Gfx.DW.CreateTextLayout(s, f, 200, 24); br.Color = c; Dc.DrawTextLayout(new Vector2(cx - l.Metrics.Width / 2, cy - l.Metrics.Height / 2), l, br); }
+    void DrawCal(RawRectF r, float y, Color4 fg, float a)
+    {
+        int ci = CalIdx(); var (bx, by, cw) = CalBox(ci); float gr = bx + cw * 7, hy = by + CHEAD / 2; var blue = new Color4(.27f, .52f, .98f, a);
+        string title = calMonth.ToString("MMMM yyyy", Tr); title = char.ToUpper(title[0], Tr) + title.Substring(1);
+        using (var tl = Gfx.DW.CreateTextLayout(title, fmt, 300, 24)) { br.Color = new Color4(fg.R, fg.G, fg.B, fg.A * a); Dc.DrawTextLayout(new Vector2(bx + 4, hy - tl.Metrics.Height / 2), tl, br); }
+        (int code, string g, float cx)[] nav = { (100, "", gr - 28 - 58 - 14), (101, "Bugün", gr - 28 - 29), (102, "", gr - 14) };
+        foreach (var n in nav)
+        {
+            if (calHot == n.code) { br.Color = dark ? new Color4(1, 1, 1, .14f * a) : new Color4(0, 0, 0, .10f * a); float hw = n.code == 101 ? 29 : 14; Dc.FillRoundedRectangle(new RoundedRectangle(new RawRectF(n.cx - hw, hy - 13, n.cx + hw, hy + 13), 7, 7), br); }
+            CT(n.g, n.code == 101 ? fmtSm : fmtIcon, n.cx, hy, new Color4(fg.R, fg.G, fg.B, fg.A * a * (n.code == 101 ? .85f : .8f)));
+        }
+        string[] wd = { "Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz" };
+        for (int k = 0; k < 7; k++) CT(wd[k], fmtSm, bx + cw * (k + .5f), by + CHEAD + CWD / 2, new Color4(fg.R, fg.G, fg.B, (k == 6 ? .42f : .5f) * a));
+        int off = ((int)calMonth.DayOfWeek + 6) % 7; var start = calMonth.AddDays(-off); float gy = by + CHEAD + CWD;
+        for (int i = 0; i < 42; i++)
+        {
+            var d = start.AddDays(i); int row = i / 7, col = i % 7; float cx = bx + cw * (col + .5f), cy = gy + CROW * (row + .5f);
+            bool other = d.Month != calMonth.Month, today = d.Date == DateTime.Today, sel = d.Date == calSel.Date;
+            if (today) { br.Color = blue; Dc.FillEllipse(new Ellipse(new Vector2(cx, cy), 15, 15), br); }
+            else if (sel) { br.Color = dark ? new Color4(1, 1, 1, .22f * a) : new Color4(0, 0, 0, .14f * a); Dc.FillEllipse(new Ellipse(new Vector2(cx, cy), 15, 15), br); }
+            else if (calHot == i) { br.Color = dark ? new Color4(1, 1, 1, .12f * a) : new Color4(0, 0, 0, .08f * a); Dc.FillEllipse(new Ellipse(new Vector2(cx, cy), 15, 15), br); }
+            Color4 c = today ? new Color4(1, 1, 1, a) : new Color4(fg.R, fg.G, fg.B, fg.A * a * (other ? .32f : col == 6 ? .62f : 1f));
+            CT(d.Day.ToString(), fmt, cx, cy, c);
+        }
     }
 
     float MediaX0() => PAD + pw - SIDE - 8 - 3 * 32;
@@ -197,10 +243,18 @@ class PopWindow : Surface
         br.Color = new Color4(1, 1, 1, a); Dc.FillEllipse(new Ellipse(new Vector2(kx, cy), 8, 8), br);
     }
 
+    void CalClick(int c)
+    {
+        if (c == 100) calMonth = calMonth.AddMonths(-1);
+        else if (c == 102) calMonth = calMonth.AddMonths(1);
+        else if (c == 101) { calMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1); calSel = DateTime.Today; }
+        else if (c >= 0 && c < 42) { var d = calMonth.AddDays(-(((int)calMonth.DayOfWeek + 6) % 7) + c); calSel = d; if (d.Month != calMonth.Month) calMonth = new(d.Year, d.Month, 1); }
+        Dirty = true;
+    }
     int HitIdx(float x, float y)
     {
         if (x < PAD + SIDE || x > PAD + pw - SIDE) return -1;
-        for (int i = 0; i < items.Count; i++) { if (items[i].Sep || items[i].Hd || items[i].Slider || items[i].Media) continue; if (y >= PAD + ys[i] && y < PAD + ys[i] + IH) return i; }
+        for (int i = 0; i < items.Count; i++) { if (items[i].Sep || items[i].Hd || items[i].Slider || items[i].Media || items[i].Cal) continue; if (y >= PAD + ys[i] && y < PAD + ys[i] + IH) return i; }
         return -1;
     }
     int SliderAt(float y) { for (int i = 0; i < items.Count; i++) if (items[i].Slider && y >= PAD + ys[i] && y < PAD + ys[i] + SLH) return i; return -1; }
@@ -223,19 +277,21 @@ class PopWindow : Surface
                     float x = N.Lo(l) / Scale, y = N.Hi(l) / Scale;
                     if (dragSl >= 0) { Slide(dragSl, x); return IntPtr.Zero; }
                     int h = HitIdx(x, y); if (h != hot) { hot = h; Dirty = true; }
+                    int ch = CalHit(x, y); if (ch != calHot) { calHot = ch; Dirty = true; }
                     int mh = MediaHit(x, y); if (mh != mediaHot) { mediaHot = mh; Dirty = true; }
                     Track(); return IntPtr.Zero;
                 }
-            case N.WM_MOUSELEAVE: Untrack(); if (hot != -1 || mediaHot != -1) { hot = -1; mediaHot = -1; Dirty = true; } return IntPtr.Zero;
+            case N.WM_MOUSELEAVE: Untrack(); if (hot != -1 || mediaHot != -1 || calHot != -1) { hot = -1; mediaHot = -1; calHot = -1; Dirty = true; } return IntPtr.Zero;
             case N.WM_LBUTTONDOWN:
                 {
                     float x = N.Lo(l) / Scale, y = N.Hi(l) / Scale; int s = SliderAt(y);
                     if (s >= 0) { dragSl = s; N.SetCapture(Hwnd); Slide(s, x); return IntPtr.Zero; }
-                    mediaArm = MediaHit(x, y); armed = HitIdx(x, y); return IntPtr.Zero;
+                    calArm = CalHit(x, y); mediaArm = MediaHit(x, y); armed = HitIdx(x, y); return IntPtr.Zero;
                 }
             case N.WM_LBUTTONUP:
                 {
                     if (dragSl >= 0) { dragSl = -1; N.ReleaseCapture(); return IntPtr.Zero; }
+                    { int cc = CalHit(N.Lo(l) / Scale, N.Hi(l) / Scale); if (cc >= 0 && cc == calArm) { CalClick(cc); calArm = -1; return IntPtr.Zero; } calArm = -1; }
                     int mk = MediaHit(N.Lo(l) / Scale, N.Hi(l) / Scale);
                     if (mk >= 0 && mk == mediaArm) { Emit?.Invoke("maccc:media", mk == 0 ? "prev" : mk == 1 ? "playpause" : "next"); mediaArm = -1; return IntPtr.Zero; }
                     mediaArm = -1;
@@ -249,6 +305,9 @@ class PopWindow : Surface
                     if (h >= 0 && items[h].Rc && !items[h].Dis && items[h].Id != null) { string id = items[h].Id; Close(); Emit?.Invoke("macpop:ract", id); }
                     return IntPtr.Zero;
                 }
+            case 0x020A: // fare tekerleği: ay değiştir
+                if (CalIdx() >= 0) { int dl = (short)(((long)w >> 16) & 0xFFFF); calMonth = calMonth.AddMonths(dl > 0 ? -1 : 1); Dirty = true; }
+                return IntPtr.Zero;
             case N.WM_ERASEBKGND: return (IntPtr)1;
         }
         handled = false; return IntPtr.Zero;

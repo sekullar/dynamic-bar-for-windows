@@ -256,7 +256,7 @@ static class Helpers
                     catch { }
                     pr.Dispose();
                 }
-                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase); var rows = new List<(string, string)>();
+                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase); var rows = new List<(string, string, int)>();
                 using var root = Registry.CurrentUser.OpenSubKey(@"Control Panel\NotifyIconSettings");
                 if (root != null)
                     foreach (var name in root.GetSubKeyNames())
@@ -268,9 +268,9 @@ static class Helpers
                         string tip = ((k.GetValue("InitialTooltip") as string) ?? "").Split('\n')[0].Trim(' ', '\u202A', '\u202C', '\r');
                         string desc = null; try { desc = FileVersionInfo.GetVersionInfo(exe).FileDescription; } catch { }
                         string nm = new[] { tip, desc?.Trim(), Path.GetFileNameWithoutExtension(exe) }.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s) && s.Length <= 28 && s != "Electron") ?? Path.GetFileNameWithoutExtension(exe);
-                        rows.Add((exe, nm.Replace("|", " ")));
+                        rows.Add((exe, nm.Replace("|", " "), Convert.ToInt32(k.GetValue("IsPromoted") ?? 0) == 1 ? 1 : 0));
                     }
-                foreach (var (exe, nm) in rows.OrderBy(r => r.Item2, StringComparer.CurrentCultureIgnoreCase)) W("tray|" + exe + "|" + nm);
+                foreach (var (exe, nm, pr) in rows.OrderBy(r => r.Item2, StringComparer.CurrentCultureIgnoreCase)) W("tray|" + exe + "|" + pr + "|" + nm);
                 W("trayend");
             }
             catch (IOException) { return; }

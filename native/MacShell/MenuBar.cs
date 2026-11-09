@@ -60,7 +60,7 @@ class MenuWindow : Surface
             if (x + w > maxX) break; btns.Add(new Btn("m" + m.I + m.Kind + m.Label, x, w, m.Kind, m.I, m.Label)); x += w;
         }
         float rx = W - 6, minX = W / 2 + IslandHalf; // sağ küme de adanın arkasına girmez; sığmayanlar atılır
-        float cw = TextW(clock, false) + 16; rx -= cw; btns.Add(new Btn("clock", rx, cw, "panel", 0, ""));
+        float cw = TextW(clock, false) + 16; rx -= cw; btns.Add(new Btn("clock", rx, cw, "clock", 0, ""));
         if (rx - 32 >= minX) { rx -= 32; btns.Add(new Btn("cc", rx, 32, "cc", 0, "")); }
         if (batPct >= 0) { float bw = TextW(batPct + "%", false) + 5 + 27 + 16; if (rx - bw >= minX) { rx -= bw; btns.Add(new Btn("bat", rx, bw, "bat", 0, "")); } }
         if (rx - 34 >= minX) { rx -= 34; btns.Add(new Btn("wifi", rx, 34, "wifi", 0, "")); }
@@ -196,7 +196,7 @@ class MenuWindow : Surface
     {
         if (!PopOpen || hot < 0 || hot >= btns.Count) return; var b = btns[hot];
         if (b.Kind == "hm" && openId != b.Id) { openId = b.Id; OpenHm?.Invoke(b.I, b.X, b.W, b.Label); return; }
-        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win" || b.Kind == "wifi" || b.Kind == "bt" || b.Kind == "bat" || b.Kind == "tray" || b.Kind == "cc") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
+        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win" || b.Kind == "wifi" || b.Kind == "bt" || b.Kind == "bat" || b.Kind == "tray" || b.Kind == "clock" || b.Kind == "cc") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
     }
     protected override IntPtr Msg(uint m, IntPtr w, IntPtr l, out bool handled)
     {
@@ -216,7 +216,6 @@ class MenuWindow : Surface
             case N.WM_LBUTTONDOWN:
                 {
                     int h = Hit(N.Lo(l) / Scale, N.Hi(l) / Scale); if (h < 0) return IntPtr.Zero; var b = btns[h]; pressed = true; Dirty = true;
-                    if (b.Id == "clock") { Emit?.Invoke("macmenu:panel", null); return IntPtr.Zero; }
                     if (b.Kind == "hm") { openId = b.Id; PopOpen = true; OpenHm?.Invoke(b.I, b.X, b.W, b.Label); return IntPtr.Zero; }
                     openId = b.Id;
                     Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label });

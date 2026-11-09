@@ -53,7 +53,7 @@ static class Program
     {
         var li = new List<PopItem>();
         foreach (var e in d.GetProperty("items").EnumerateArray())
-            li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), Img = Str(e, "img"), RIcon = Str(e, "ricon"), Ch = Str(e, "ch"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis"), Slider = Bool(e, "slider"), Media = Bool(e, "media"), Keep = Bool(e, "keep"), Rc = Bool(e, "rc"), Sc = Str(e, "sc"), Value = Num(e, "value") });
+            li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), Img = Str(e, "img"), RIcon = Str(e, "ricon"), Ch = Str(e, "ch"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis"), Slider = Bool(e, "slider"), Media = Bool(e, "media"), Keep = Bool(e, "keep"), Rc = Bool(e, "rc"), Cal = Bool(e, "cal"), Sc = Str(e, "sc"), Value = Num(e, "value") });
         return li;
     }
     static void EnsurePop()
