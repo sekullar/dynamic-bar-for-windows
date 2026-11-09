@@ -75,7 +75,12 @@ const display = () => { const all = screen.getAllDisplays(), s = ctx.settings();
 const pins = () => String(ctx.settings().dockPins || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
 const MENU_ARCHIVED = false;
 const menuHide = () => ctx.settings().macMenuHide === true;
-const autoHide = () => ctx.settings().macDockHide === true;
+// Dock otomatik gizleme: "her zaman", "yalnızca bir pencere büyütülmüşken" ya da "yalnızca hiçbir pencere büyütülmemişken"
+let anyMax = false, fastT = null, fastSig = '';
+const autoHide = () => {
+  const s = ctx.settings(); if (s.macDockHide !== true) return false;
+  const m = s.macDockHideMode; return m === 'maximized' ? anyMax : m === 'free' ? !anyMax : true;
+};
 const wantMenu = () => !MENU_ARCHIVED && ctx.settings().macMenu !== false, wantDock = () => ctx.settings().macDock !== false;
 const enabled = () => process.platform === 'win32' && ctx && ctx.settings().macbar === true;
 const dockSize = () => Math.round(clampN(ctx.settings().macDockSize || 40, 28, 72)); // simge boyutu (DIP)
@@ -134,7 +139,7 @@ function place() {
 }
 function reserve() {
   const di = ctx.settings().display;
-  const a = menuBar.update(wantMenu() && !hiddenFs && !menuHide(), di, MENU_H), b = dockBar.update(wantDock() && !hiddenFs && !autoHide(), di, dockReserve());
+  const a = menuBar.update(wantMenu() && !hiddenFs && !menuHide(), di, MENU_H), b = dockBar.update(wantDock() && !hiddenFs && !autoHide() && !(ctx.settings().macDockHide === true && ctx.settings().macDockHideMode === 'maximized'), di, dockReserve()); // "büyütülmüşken gizle" modunda alan hiç ayrılmaz: büyütülen pencere boşluk bırakmadan tam oturur
   if (a || b) { [100, 400, 1000].forEach((t) => setTimeout(() => { place(); ctx.onReserve(); }, t)); } // Windows çalışma alanını değiştirirken pencereleri iter
 }
 // Elle gizleme (kısayol): imleç ekranın üstüne/altına dayanınca ilgili çubuk geçici belirir
@@ -255,6 +260,15 @@ function poll() {
   if (tick % 40 === 1) pushTheme();
   const me = lc(process.execPath), all = wl.list(), g = new Map();
   winByH.clear(); for (const w of all) winByH.set(String(w.hwnd), w);
+  { // büyütülmüş (maximize) pencere var mı: Dock'un koşullu gizlenmesi için
+    const st = ctx.settings(); let mx = false;
+    if (st.macDockHide === true && (st.macDockHideMode === 'maximized' || st.macDockHideMode === 'free')) {
+      let fh = null; try { const f0 = wl.foreground(); fh = f0 && String(f0.hwnd); } catch {}
+      const cand = fh && winByH.has(fh) ? [winByH.get(fh), ...all.filter((w) => String(w.hwnd) !== fh)] : all; // öndeki pencere önce: çoğu zaman ilk bakışta biter
+      for (const w of cand) { const b = base(lc(w.exe)); if (w.minimized || w.other || lc(w.exe) === me || BLOCK.has(b) || b === 'applicationframehost.exe' && !w.title) continue; try { if (wl.isZoomed(w.hwnd)) { mx = true; break; } } catch {} }
+    }
+    if (mx !== anyMax) { anyMax = mx; reserve(); pushPrefs(); }
+  }
   for (const w of all) {
     const e = lc(w.exe), b = base(e);
     if (e === me || BLOCK.has(b)) continue;
@@ -747,6 +761,10 @@ function apply() {
   hideTaskbar(); setTimeout(() => { ensurePop(); warmBackdrop(true); }, 1500);
   sync();
   if (!timer) { timer = setInterval(poll, 700); poll(); }
+  if (!fastT) fastT = setInterval(() => { // koşullu gizleme açıkken öndeki pencere/büyütme durumu değişince 700 ms'yi beklemeden tara
+    const st = ctx.settings(); if (st.macDockHide !== true || (st.macDockHideMode !== 'maximized' && st.macDockHideMode !== 'free')) return;
+    try { const f = wl.foreground(), s = f ? String(f.hwnd) + (wl.isZoomed(f.hwnd) ? 'z' : '') : ''; if (s !== fastSig) { fastSig = s; poll(); } } catch {}
+  }, 200);
   if (!wifiTimer) { wifiTimer = setInterval(() => warmWifi(true), 45000); setTimeout(() => warmWifi(true), 3000); }
   pushTheme(); pushPrefs();
   if (alive(popWin)) popWin.webContents.send('maccc:state', ccState());
@@ -755,6 +773,7 @@ function stop() {
   if (wifiTimer) { clearInterval(wifiTimer); wifiTimer = null; }
   try { natSend('pop', 'pop:close', true); } catch {}
   if (timer) { clearInterval(timer); timer = null; }
+  if (fastT) { clearInterval(fastT); fastT = null; }
   if (peekT) { clearInterval(peekT); peekT = null; } manHide = false; peek = ''; hiddenFs = fsHide;
   [menuWin, dockWin, popWin].forEach((w) => { if (alive(w)) w.destroy(); }); menuWin = dockWin = popWin = null; popReady = false; pop = null;
   trcStop(); [ccProc, menusProc, btProc, pwrProc].forEach((p) => { if (p) { try { p.kill(); } catch {} } }); ccProc = menusProc = btProc = pwrProc = null; clearTimeout(btIdleT); menusReady = false;

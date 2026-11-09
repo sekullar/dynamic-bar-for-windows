@@ -129,7 +129,7 @@ class DockWindow : Surface
             float t = (hov || dragging || prevIdx >= 0 || CursorAtEdge()) ? 1f : (DateTime.UtcNow < leaveAt ? 1f : 0f);
             shown += (t - shown) * .22f; if (MathF.Abs(t - shown) < .004f) shown = t; else busy = true;
         }
-        else if (shown != 1f) { shown = 1f; }
+        else if (shown != 1f) { shown += (1f - shown) * .22f; if (MathF.Abs(1f - shown) < .004f) shown = 1f; else busy = true; } // gizleme kalkınca alttan kayarak gelir
         float pt = prevIdx >= 0 ? 1 : 0; float pp = prevA; prevA += (pt - prevA) * prevK; if (MathF.Abs(pt - prevA) < .01f) prevA = pt; if (pp != prevA) busy = true;
         Tb = Matrix3x2.CreateTranslation(0, (1 - shown) * HideOff);
     }
