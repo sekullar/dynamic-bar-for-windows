@@ -1,12 +1,14 @@
 // Windows masaüstü bildirimlerini adaya taşır. Windows'un bildirim veritabanı (wpndatabase.db) salt okunur izlenir
-// (MacShell.exe --helper notif). İsteğe bağlı: Windows'un sağ alttaki bildirim balonları kapatılır ("Rahatsız etme"
-// düğmesiyle aynı kayıt defteri değeri); bildirimler Windows bildirim merkezine yine düşer, ada de bunları gösterir.
-// Uygulama kapanınca ya da çökünce ilk açılışta özgün değer geri yüklenir.
-const { spawn, execFile } = require('child_process');
+// (MacShell.exe --helper notif). İsteğe bağlı: Windows'un sağ üst/alttaki bildirim balonları kapatılır; bildirimler
+// Windows bildirim merkezine yine düşer, ada da bunları gösterir.
+// Balonlar uygulama bazlı "bildirim başlığı göster" (ShowBanner=0) ayarıyla kapatılır: bu Windows sürümünde genel
+// "NOC_GLOBAL_SETTING_TOASTS_ENABLED" değeri balonları gizlemiyor, uygulama bazlı ayar ise anında çalışıyor.
+// Özgün değerler winnotif-state.json'a yazılır; uygulama kapanınca ya da çökünce ilk açılışta geri yüklenir.
+const { spawn, execFile, execFileSync } = require('child_process');
 const fs = require('fs'), path = require('path');
 
 const REG_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Notifications\\Settings';
-const REG_VAL = 'NOC_GLOBAL_SETTING_TOASTS_ENABLED';
+const REG_VAL = 'NOC_GLOBAL_SETTING_TOASTS_ENABLED'; // yalnızca eski sürümün bıraktığı değeri geri yüklemek için
 let ctx, proc = null, stopped = false, hidden = false, restartT = null;
 
 const stateFile = () => path.join(ctx.userData(), 'winnotif-state.json');
@@ -24,6 +26,7 @@ function onLine(l) {
   if (!l || l[0] !== '{') return;
   let m; try { m = JSON.parse(l); } catch { return; }
   if (!m.title && !m.text) return;
+  hideApp(m.pid);
   const app = pretty(m.pid, m.app);
   ctx.send({ title: (m.title || app).slice(0, 80), text: (m.text || '').slice(0, 200), icon: '🔔', app, ttl: 6 });
 }
@@ -40,35 +43,48 @@ function startProc() {
 function stopProc() { clearTimeout(restartT); if (proc) { const p = proc; proc = null; try { p.kill(); } catch {} } }
 
 // ---- Windows balonlarını kapat / geri aç ----
+const SETTINGS = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Notifications\\Settings';
+const PS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'];
+// Tüm uygulamaların ShowBanner değerini kaydet (önceki oturumdan kalan özgün değerlere dokunma) ve 0 yap
+const HIDE_PS = "$k='" + SETTINGS + "'; $f=$env:WN_STATE; $st=@{}; if(Test-Path $f){ try{ $j=Get-Content $f -Raw | ConvertFrom-Json; $j.apps.PSObject.Properties | ForEach-Object { $st[$_.Name]=[int]$_.Value } }catch{} }; " +
+  "Get-ChildItem $k | ForEach-Object { $v=(Get-ItemProperty $_.PSPath).ShowBanner; if(-not $st.ContainsKey($_.PSChildName)){ $st[$_.PSChildName]= if($null -eq $v){-1}else{[int]$v} }; if($v -ne 0){ Set-ItemProperty $_.PSPath ShowBanner 0 -Type DWord } }; " +
+  "[IO.File]::WriteAllText($f, (@{apps=$st} | ConvertTo-Json -Compress))";
+const RESTORE_PS = "$k='" + SETTINGS + "'; $f=$env:WN_STATE; if(-not (Test-Path $f)){ return }; $j=Get-Content $f -Raw | ConvertFrom-Json; " +
+  "$j.apps.PSObject.Properties | ForEach-Object { $p=$k+'\\'+$_.Name; if(Test-Path -LiteralPath $p){ if([int]$_.Value -eq -1){ Remove-ItemProperty -LiteralPath $p -Name ShowBanner -ErrorAction SilentlyContinue } else { Set-ItemProperty -LiteralPath $p -Name ShowBanner -Value ([int]$_.Value) -Type DWord } } }; Remove-Item $f -Force";
+const psOpts = (extra) => ({ windowsHide: true, env: Object.assign({}, globalThis['process']['env'], { WN_STATE: stateFile() }), ...extra });
+const seen = new Set(); // bu oturumda ShowBanner=0 yapılmış uygulamalar (bildirimle yeni gelenler için)
+
 function hideNative(on) {
   if (on === hidden) return; hidden = on;
-  if (on) {
-    reg(['query', REG_KEY, '/v', REG_VAL], (e, out) => {
-      if (!hidden) return; // bu arada kapatıldı
-      const m = !e && /REG_DWORD\s+0x([0-9a-f]+)/i.exec(String(out));
-      const orig = m ? parseInt(m[1], 16) : null; // null: değer yoktu (varsayılan: açık)
-      if (!fs.existsSync(stateFile())) { try { fs.writeFileSync(stateFile(), JSON.stringify({ orig })); } catch {} }
-      reg(['add', REG_KEY, '/v', REG_VAL, '/t', 'REG_DWORD', '/d', '0', '/f']);
-    });
-  } else restoreNative();
+  if (on) { seen.clear(); execFile('powershell.exe', [...PS, HIDE_PS], psOpts(), (e, so, se) => { if (e || se) ctx.log('winnotif balon gizleme', e ? e.message : '', String(se).slice(0, 300)); }); }
+  else restoreNative();
 }
 function restoreNative() {
-  let orig;
-  try { orig = JSON.parse(fs.readFileSync(stateFile(), 'utf8')).orig; } catch { return; }
-  if (orig === 0) { try { fs.unlinkSync(stateFile()); } catch {} return; } // kullanıcı zaten kapatmıştı: dokunma
-  reg(orig == null ? ['delete', REG_KEY, '/v', REG_VAL, '/f'] : ['add', REG_KEY, '/v', REG_VAL, '/t', 'REG_DWORD', '/d', String(orig), '/f']);
-  try { fs.unlinkSync(stateFile()); } catch {}
+  if (!fs.existsSync(stateFile())) return;
+  execFile('powershell.exe', [...PS, RESTORE_PS], psOpts(), () => {});
 }
 // kapanırken eşzamanlı geri yükle (süreç hemen sonlanabilir)
 function restoreSync() {
-  let orig;
-  try { orig = JSON.parse(fs.readFileSync(stateFile(), 'utf8')).orig; } catch { return; }
+  if (!fs.existsSync(stateFile())) return;
   try {
-    if (orig === 0) { /* dokunma */ }
-    else if (orig == null) require('child_process').execFileSync('reg', ['delete', REG_KEY, '/v', REG_VAL, '/f'], { windowsHide: true, timeout: 3000 });
-    else require('child_process').execFileSync('reg', ['add', REG_KEY, '/v', REG_VAL, '/t', 'REG_DWORD', '/d', String(orig), '/f'], { windowsHide: true, timeout: 3000 });
-    fs.unlinkSync(stateFile());
+    let old = null; try { old = JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch {}
+    if (old && old.apps) execFileSync('powershell.exe', [...PS, RESTORE_PS], psOpts({ timeout: 8000 }));
+    else { // eski sürümün biçimi: genel değer
+      const orig = old && old.orig;
+      if (orig == null) execFileSync('reg', ['delete', REG_KEY, '/v', REG_VAL, '/f'], { windowsHide: true, timeout: 3000 });
+      else if (orig !== 0) execFileSync('reg', ['add', REG_KEY, '/v', REG_VAL, '/t', 'REG_DWORD', '/d', String(orig), '/f'], { windowsHide: true, timeout: 3000 });
+      fs.unlinkSync(stateFile());
+    }
   } catch {}
+}
+// kayıt defterinde henüz olmayan (ilk kez bildirim gönderen) uygulamanın balonunu da kapat; geri yüklemede anahtar yoksa dokunulmaz
+function hideApp(id) {
+  if (!hidden || !id || seen.has(id) || id.includes(String.fromCharCode(92))) return; seen.add(id);
+  try { // özgün değer "yoktu" (-1) olarak kaydedilir ki kapatınca geri alınabilsin
+    let st = { apps: {} }; try { st = JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch {}
+    st.apps = st.apps || {}; if (!(id in st.apps)) { st.apps[id] = -1; fs.writeFileSync(stateFile(), JSON.stringify(st)); }
+  } catch {}
+  reg(['add', REG_KEY + String.fromCharCode(92) + id, '/v', 'ShowBanner', '/t', 'REG_DWORD', '/d', '0', '/f']);
 }
 
 function apply() {
