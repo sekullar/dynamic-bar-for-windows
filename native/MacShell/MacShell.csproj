@@ -15,6 +15,7 @@
     <None Include="fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" LinkBase="fonts" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="Vortice.Direct2D1" Version="3.6.2" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.6.2" />
     <PackageReference Include="Vortice.DirectComposition" Version="3.6.2" />

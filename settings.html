@@ -72,6 +72,8 @@
     S('ttlScale', 'Bildirim süresi', [['0.6', 'Kısa'], ['1', 'Normal'], ['1.5', 'Uzun'], ['2', 'Çok uzun']], true) +
     T('startupToast', 'Açılışta selam ver', 'Uygulama başlayınca küçük bir karşılama bildirimi gösterir.') +
     T('hideFullscreen', 'Tam ekranda gizle', 'Oyun veya tam ekran video açıkken bar kendini gizler.') +
+    T('winNotif', 'Windows bildirimleri adada görünsün', 'WhatsApp (telefon bağlantısı), Discord, Outlook gibi uygulamaların masaüstü bildirimleri adada kart olarak çıkar. Sessiz saatler, Oyun modu ve susturulan uygulamalar burada da geçerlidir.') +
+    T('winNotifHide', 'Windows’un kendi bildirim balonu çıkmasın', 'Yukarıdaki seçenek açıkken sağ alttaki Windows balonları kapatılır (Windows’un “Rahatsız etme” ayarıyla aynı); bildirimler yine bildirim merkezine düşer. Dynamic Bar kapanınca eski ayar geri yüklenir.') +
     T('gameMode', 'Oyun modu', 'Oyun (ör. Valorant), tam ekran uygulama ya da sunum açıkken bildirimler ertelenir; bitince "kaçırdıkların" özetlenir. Windows’un kendi oyun ve tam ekran algısı kullanılır.') +
     T('autostart', 'Windows ile başlat', 'Oturum açınca Dynamic Bar kendiliğinden açılır.') +
     X('panelKey', 'Paneli aç/kapat kısayolu', 'Control+Alt+B') + X('testKey', 'Test bildirimi kısayolu', 'Control+Alt+N') +
@@ -84,6 +86,9 @@
     G('macDockSize', 'Dock simge boyutu', 28, 72, 2) +
     T('macDockHide', 'Dock otomatik gizlensin', 'Dock, imleç ekranın en altına inince belirir. Açıkken Dock yer ayırmaz, pencereler tam ekranı kaplar.') +
     S('macDockAnim', 'Dock ve menü animasyonları', [['lively', 'Hareketli'], ['soft', 'Yumuşak (yavaş)'], ['off', 'Kapalı (anında)']]) +
+    S('macDockHover', 'Dock üzerine gelince hareket', [['normal', 'Normal'], ['gentle', 'Çok yumuşak'], ['bouncy', 'Zıplamalı']]) +
+    S('barsKey', 'Barı ve Dock’u gizle/göster kısayolu', [['Alt+Return', 'Alt+Enter'], ['Control+Alt+F', 'Ctrl+Alt+F'], ['', 'Kapalı']]) +
+    T('barsPeek', 'Gizliyken kenara gelince göster', 'Kısayolla gizlediğinde imleci ekranın en üstüne ya da en altına götürünce menü çubuğu ya da Dock geçici belirir. Dikkat: Alt+Enter seçiliyken bu tuş diğer uygulamalara ulaşmaz.') +
     T('macDockPreview', 'Pencere önizlemeleri', 'Çalışan uygulamanın simgesinde bekleyince pencerelerinin küçük görüntüleri çıkar; birine tıklayınca o pencere öne gelir.') +
     T('macIconPack', 'macOS simge paketi', 'Tanınan uygulamalar (Chrome, VS Code, Discord…) macOS tarzı simgeyle görünür; diğerleri beyaz kare plakaya oturur.') +
     T('macNative', 'Yerel GPU çizimi (önerilen)', 'Dock ayrı bir C# uygulamasıyla çizilir: akıcı büyütme. Kapatırsan web tabanlı sürüm kullanılır.') +

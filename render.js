@@ -44,14 +44,35 @@ function onLine(l) {
   }
 }
 
-function start() {
-  if (process.platform !== 'win32' || proc) return;
+// render.ps1 (~90 MB) yalnızca izlenen bir montaj programı açıkken çalışır: 6 sn'de bir hafif bir süreç listesi bakışı yapılır
+const WATCHED = ['resolve.exe', 'adobe premiere pro.exe', 'adobe media encoder.exe', 'capcut.exe'];
+let scanT = null, absent = 0;
+function anyRunning(cb) {
+  require('child_process').execFile('tasklist', ['/NH', '/FO', 'CSV'], { windowsHide: true, maxBuffer: 1 << 22 }, (e, out) => {
+    if (e) return cb(true); // emin olunamazsa çalışsın
+    const s = String(out).toLowerCase(); cb(WATCHED.some((n) => s.includes('"' + n + '"')));
+  });
+}
+function spawnProc() {
+  if (proc) return;
   proc = ctx.ps('render.ps1');
   ctx.lines(proc, onLine);
-  proc.on('exit', () => { proc = null; if (!stopped) setTimeout(start, 5000); });
+  proc.on('exit', () => { proc = null; });
+}
+function scan() {
+  if (stopped) return;
+  anyRunning((on) => {
+    if (stopped) return;
+    if (on) { absent = 0; spawnProc(); }
+    else if (proc && !active && ++absent >= 5) { try { proc.kill(); } catch {} proc = null; absent = 0; } // ~30 sn yok: kapat
+  });
+}
+function start() {
+  if (process.platform !== 'win32' || scanT) return;
+  scan(); scanT = setInterval(scan, 6000);
 }
 
 function init(c) { ctx = c; stopped = false; start(); }
-function stop() { stopped = true; clearTimeout(endT); if (proc) proc.kill(); }
+function stop() { stopped = true; clearTimeout(endT); clearInterval(scanT); scanT = null; if (proc) proc.kill(); }
 
 module.exports = { init, stop };

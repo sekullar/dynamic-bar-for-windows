@@ -22,6 +22,7 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        if (args.Length >= 2 && args[0] == "--helper") { Environment.Exit(Helpers.Run(args[1])); return; }
         N.SetProcessDpiAwarenessContext(new IntPtr(-4)); // PER_MONITOR_AWARE_V2
         N.timeBeginPeriod(1);
         stdout = new StreamWriter(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false)) { AutoFlush = true };
@@ -52,7 +53,7 @@ static class Program
     {
         var li = new List<PopItem>();
         foreach (var e in d.GetProperty("items").EnumerateArray())
-            li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), RIcon = Str(e, "ricon"), Ch = Str(e, "ch"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis"), Slider = Bool(e, "slider"), Media = Bool(e, "media"), Keep = Bool(e, "keep"), Sc = Str(e, "sc"), Value = Num(e, "value") });
+            li.Add(new PopItem { Id = Str(e, "id"), Label = Str(e, "label"), Icon = Str(e, "icon"), Img = Str(e, "img"), RIcon = Str(e, "ricon"), Ch = Str(e, "ch"), Sep = Bool(e, "sep"), Hd = Bool(e, "hd"), Checked = Bool(e, "checked"), Dis = Bool(e, "dis"), Slider = Bool(e, "slider"), Media = Bool(e, "media"), Keep = Bool(e, "keep"), Rc = Bool(e, "rc"), Sc = Str(e, "sc"), Value = Num(e, "value") });
         return li;
     }
     static void EnsurePop()
@@ -99,6 +100,7 @@ static class Program
     {
         string w = Str(c, "w") ?? "all", ch = Str(c, "ch"); c.TryGetProperty("d", out var d);
         if (ch == "force-hover") { dock?.ForceHover(Num(d, "x"), (int)Num(d, "i")); return; }
+        if (ch == "menu:tray") { MenuWindow.TrayFlyout(); return; }
         if (ch == "prefs" && w == "menu")
         {
             string an = Str(d, "anim") ?? "lively"; PopWindow.Dur = an == "soft" ? 300f : an == "off" ? 1f : 130f;
@@ -130,7 +132,7 @@ static class Program
             return;
         }
         if (ch == "pop:update") { if (pop != null && pop.IsOpen) pop.Update(ParseItems(d)); return; }
-        if (ch == "prefs") { if (dock != null) { dock.AutoHide = Bool(d, "autohide"); dock.PreviewOn = !d.TryGetProperty("previews", out var pv) || pv.ValueKind != JsonValueKind.False; dock.SetAnim(Str(d, "anim") ?? "lively"); dock.Dirty = true; } return; }
+        if (ch == "prefs") { if (dock != null) { dock.AutoHide = Bool(d, "autohide"); dock.PreviewOn = !d.TryGetProperty("previews", out var pv) || pv.ValueKind != JsonValueKind.False; dock.SetAnim(Str(d, "anim") ?? "lively", Str(d, "hover") ?? "normal"); dock.Dirty = true; } return; }
         if (ch == "quit") { running = false; return; }
         if (ch == "bounds")
         {

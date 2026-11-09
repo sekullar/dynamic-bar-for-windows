@@ -7,7 +7,7 @@ using Vortice.Mathematics;
 
 namespace MacShell;
 
-class PopItem { public string Id, Label, Icon, Sc, RIcon, Ch; public bool Sep, Hd, Checked, Dis, Slider, Media, Keep; public float Value; }
+class PopItem { public string Id, Label, Icon, Sc, RIcon, Ch, Img; public bool Sep, Hd, Checked, Dis, Slider, Media, Keep, Rc; public float Value; }
 
 static class WallData { public static ID2D1Bitmap1 Bmp; public static float Iw, Ih, Sw, Sh; }
 
@@ -17,7 +17,7 @@ class PopWindow : Surface
     public Action<string, object> Emit; public Action OnClosed;
     public bool IsOpen; public string Key; public static float Dur = 130;
     List<PopItem> items = new(); bool dark; int hot = -1, armed = -1, dragSl = -1; float pw, ph; float[] ys = Array.Empty<float>();
-    DateTime openAt; ID2D1SolidColorBrush br; IDWriteTextFormat fmt, fmtSm, fmtIcon; ID2D1Bitmap1 glass;
+    readonly Dictionary<string, ID2D1Bitmap1> imgs = new(); DateTime openAt; ID2D1SolidColorBrush br; IDWriteTextFormat fmt, fmtSm, fmtIcon; ID2D1Bitmap1 glass;
     int pl, pt, pr, pb; // panelin ekran pikseli
     int anchorPx, topPx, limitPx; bool anchorRight; float scaleNow = 1;
     const float PAD = 14, VP = 6, IH = 24, SH = 11, HH = 22, SLH = 38, MH = 62, SIDE = 6, RAD = 12;
@@ -51,8 +51,8 @@ class PopWindow : Surface
         if (!IsOpen) return;
         if (dragSl >= 0 && dragSl < list.Count && dragSl < items.Count && list[dragSl].Slider) list[dragSl].Value = items[dragSl].Value;
         bool same = list.Count == items.Count;
-        for (int i = 0; same && i < list.Count; i++) same = list[i].Sep == items[i].Sep && list[i].Hd == items[i].Hd && list[i].Slider == items[i].Slider && list[i].Media == items[i].Media && list[i].Label == items[i].Label && list[i].Sc == items[i].Sc;
-        if (same) { for (int i = 0; i < list.Count; i++) { if (i != dragSl) items[i].Value = list[i].Value; items[i].Checked = list[i].Checked; items[i].Icon = list[i].Icon; items[i].Dis = list[i].Dis; items[i].Keep = list[i].Keep; } if (dragSl >= 0) { } Dirty = true; return; } // yerleşim aynıysa yeniden kurma (kaydırırken akıcı kalsın)
+        for (int i = 0; same && i < list.Count; i++) same = list[i].Sep == items[i].Sep && list[i].Hd == items[i].Hd && list[i].Slider == items[i].Slider && list[i].Media == items[i].Media && list[i].Label == items[i].Label && list[i].Sc == items[i].Sc && list[i].Img == items[i].Img;
+        if (same) { for (int i = 0; i < list.Count; i++) { if (i != dragSl) items[i].Value = list[i].Value; items[i].Checked = list[i].Checked; items[i].Icon = list[i].Icon; items[i].Dis = list[i].Dis; items[i].Keep = list[i].Keep; items[i].Rc = list[i].Rc; } if (dragSl >= 0) { } Dirty = true; return; } // yerleşim aynıysa yeniden kurma (kaydırırken akıcı kalsın)
         items = list; hot = -1; Rebuild(); Dirty = true;
     }
 
@@ -127,7 +127,12 @@ class PopWindow : Surface
             if (on) { br.Color = new Color4(.27f, .52f, .98f, a); Dc.FillRoundedRectangle(new RoundedRectangle(new RawRectF(r.Left + SIDE, y, r.Right - SIDE, y + IH), 6, 6), br); }
             bool checkRight = it.Checked && !string.IsNullOrEmpty(it.Icon);
             string ic = it.Checked && !checkRight ? "" : it.Icon;
-            if (!string.IsNullOrEmpty(ic))
+            if (!string.IsNullOrEmpty(it.Img))
+            {
+                if (!imgs.TryGetValue(it.Img, out var ib)) imgs[it.Img] = ib = Glass.LoadDataUrl(it.Img);
+                if (ib != null) Dc.DrawBitmap(ib, new RawRectF(r.Left + SIDE + 9, y + (IH - 18) / 2, r.Left + SIDE + 27, y + (IH + 18) / 2), it.Dis ? .5f : 1f, InterpolationMode.Linear, null, null);
+            }
+            else if (!string.IsNullOrEmpty(ic))
             {
                 using var il = Gfx.DW.CreateTextLayout(ic, fmtIcon, 30, 24); br.Color = c;
                 Dc.DrawTextLayout(new Vector2(r.Left + SIDE + 9 + (18 - il.Metrics.Width) / 2, y + (IH - il.Metrics.Height) / 2), il, br);
@@ -237,6 +242,12 @@ class PopWindow : Surface
                     int h = HitIdx(N.Lo(l) / Scale, N.Hi(l) / Scale);
                     if (h >= 0 && h == armed && !items[h].Dis && items[h].Id != null) { string id = items[h].Id; if (!items[h].Keep) Close(); Emit?.Invoke("macpop:nact", id); }
                     armed = -1; return IntPtr.Zero;
+                }
+            case N.WM_RBUTTONUP:
+                {
+                    int h = HitIdx(N.Lo(l) / Scale, N.Hi(l) / Scale);
+                    if (h >= 0 && items[h].Rc && !items[h].Dis && items[h].Id != null) { string id = items[h].Id; Close(); Emit?.Invoke("macpop:ract", id); }
+                    return IntPtr.Zero;
                 }
             case N.WM_ERASEBKGND: return (IntPtr)1;
         }

@@ -7,6 +7,7 @@ const appbar = require('./appbar');
 const parcel = require('./parcel');
 const render = require('./render');
 const privacy = require('./privacy');
+const winnotif = require('./winnotif');
 const internet = require('./internet');
 const kbdlight = require('./kbdlight');
 const macbar = require('./macbar');
@@ -29,7 +30,7 @@ const DEFAULTS = {
   // konum ve davranış (mode: float | dock | desktop (yüzen, sadece masaüstünde) | dock-desktop (yapışık, sadece masaüstünde))
   // reserveSpace: bar her zaman görünürken ekranın üstünde pencerelere yer bırakmaz (görev çubuğu gibi); sadece masaüstü modlarında uygulanmaz
   // macbar: Windows görev çubuğunu gizleyip yerine macOS menü çubuğu (üst) ve Dock (alt) koyar; dockPins: Dock'a sabitlenen exe yolları (satır satır)
-  macbar: false, macNative: true, macIconPack: true, macDockHide: false, macDockPreview: true, macDockAnim: 'lively', macMenu: true, macMenuHide: false, macDock: true, macDockSize: 40, macMenuText: 'auto', dockPins: '',
+  macbar: false, macNative: true, macIconPack: true, macDockHide: false, macDockPreview: true, macDockAnim: 'lively', macDockHover: 'normal', barsKey: 'Alt+Return', barsPeek: true, winNotif: false, winNotifHide: false, macMenu: true, macMenuHide: false, macDock: true, macDockSize: 40, macMenuText: 'auto', dockPins: '',
   mode: 'float', reserveSpace: true, display: 0, hideFullscreen: true, gameMode: true, autostart: false,
   openOn: 'click', closeDelay: 3.5, sleepAfter: 20, ttlScale: 1, startupToast: true, swipe: 160,
   panelKey: 'Control+Alt+B', testKey: 'Control+Alt+N',
@@ -242,7 +243,7 @@ const broadcast = () => [win, settingsWin].forEach((w) => alive(w) && w.webConte
 function applyPatch(p, reset) {
   const wasDnd = settings.dnd;
   settings = reset ? { ...DEFAULTS, todos: settings.todos } : { ...settings, ...pickKnown(sealSecrets(p)) };
-  save(); updateVisibility(); broadcast(); extras.apply(); regKeys(); macbar.apply(); reserve(); syncLink();
+  save(); updateVisibility(); broadcast(); extras.apply(); winnotif.apply(); regKeys(); macbar.apply(); reserve(); syncLink();
   if (wasDnd && !settings.dnd) flushMissed();
 }
 
@@ -542,7 +543,15 @@ function createTray() {
 }
 
 const unpacked = (p) => p.replace(/app.asar(?!.unpacked)/, 'app.asar.unpacked'); // paketlenmiş uygulamada betikler asar dışına açılır; PowerShell asar içini okuyamaz
-const ps = (f) => spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', unpacked(path.join(__dirname, 'scripts', f))], { windowsHide: true });
+// Sık çalışan yardımcılar PowerShell (~90 MB/süreç) yerine MacShell.exe --helper <mod> (~30 MB) ile çalışır; exe yoksa PowerShell betiği kullanılır (aynı çıktı biçimi)
+const HELPER_MODES = { 'watcher.ps1': 'watcher', 'media.ps1': 'media', 'volume.ps1': 'vol', 'volctl.ps1': 'volctl', 'net.ps1': 'net', 'privacy.ps1': 'privacy', 'cc.ps1': 'cc', 'pwr.ps1': 'pwr', 'tray.ps1': 'tray' };
+let helperExe;
+const helperPath = () => { if (helperExe !== undefined) return helperExe; helperExe = null; for (const p of [path.join(__dirname, 'native', 'bin', 'MacShell.exe'), path.join(__dirname, 'native', 'MacShell', 'bin', 'Release', 'net9.0-windows10.0.19041.0', 'MacShell.exe')]) { const q = unpacked(p); if (fs.existsSync(q)) { helperExe = q; break; } } return helperExe; };
+const ps = (f) => {
+  const mode = HELPER_MODES[f], exe = mode && settings.nativeHelpers !== false && helperPath();
+  if (exe) return spawn(exe, ['--helper', mode], { windowsHide: true });
+  return spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', unpacked(path.join(__dirname, 'scripts', f))], { windowsHide: true });
+};
 function lines(proc, cb) {
   let buf = ''; proc.on('error', () => {}); proc.stderr && proc.stderr.on('data', (d) => { console.error('[ps]', String(d).trim()); LOG('[ps]', String(d).trim()); }); proc.stdout.setEncoding('utf8');
   proc.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { cb(buf.slice(0, i).trim()); buf = buf.slice(i + 1); } });
@@ -603,11 +612,12 @@ function startWatchers() {
 
 let keysSig = '';
 function regKeys() {
-  const sig = settings.panelKey + '|' + settings.testKey; if (sig === keysSig) return; keysSig = sig;
+  const sig = settings.panelKey + '|' + settings.testKey + '|' + settings.barsKey; if (sig === keysSig) return; keysSig = sig;
   globalShortcut.unregisterAll();
   const add = (acc, fn) => { try { if (acc) globalShortcut.register(acc, fn); } catch {} };
   add(settings.testKey, demo);
   add(settings.panelKey, () => alive(win) && win.webContents.send('toggle', 'toggle'));
+  add(settings.barsKey, () => macbar.toggleBars()); // üst bar + Dock'u gizle/göster
 }
 
 ipcMain.handle('media:get', () => media);
@@ -647,6 +657,7 @@ app.whenReady().then(() => {
   }
   render.init({ settings: () => settings, send, ps, lines, dismiss: (key) => { if (alive(win)) win.webContents.send('dismiss', { key }); } });
   privacy.init({ settings: () => settings, send, ps, lines });
+  winnotif.init({ settings: () => settings, send, lines, log: LOG, helperPath, userData: () => app.getPath('userData') });
   internet.init({ settings: () => settings, send, onResume: (f) => powerMonitor.on('resume', f) });
   kbdlight.init({ settings: () => settings, muted: () => suppressed({}) });
   extras.init({ settings: () => settings, win: () => win, send, ps, lines, ws: wsMessage, allowReq, meeting: setMeeting });
@@ -657,5 +668,5 @@ app.whenReady().then(() => {
   ['display-added', 'display-removed', 'display-metrics-changed'].forEach((e) => screen.on(e, recover));
   ['resume', 'unlock-screen'].forEach((e) => powerMonitor.on(e, recover));
 });
-app.on('will-quit', () => { quitting = true; macbar.stop(); spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); render.stop(); privacy.stop(); internet.stop(); });
+app.on('will-quit', () => { quitting = true; macbar.stop(); spotlight.destroy(); parcel.destroy(); appbar.remove(); removeLink(); globalShortcut.unregisterAll(); [watcher, mediaProc].forEach((p) => p && p.kill()); extras.stop(); render.stop(); winnotif.stop(); privacy.stop(); internet.stop(); });
 app.on('window-all-closed', (e) => e.preventDefault()); // ayar penceresi kapanınca uygulama kapanmasın

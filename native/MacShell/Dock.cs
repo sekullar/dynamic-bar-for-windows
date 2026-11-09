@@ -24,7 +24,17 @@ class DockWindow : Surface
     public float Size = 40; public Action<string, object> Emit;
     public bool AutoHide, PreviewOn = true; public Func<bool> Blocked; // Blocked: bağlam menüsü açıkken pencere önizlemesi çıkmasın
     float peak = .40f, springK = .13f, springD = .78f, spread = 1.35f, tipK = .28f, prevK = .3f;
-    public void SetAnim(string a)
+    public void SetAnim(string a, string hover = "normal")
+    {
+        SetAnimBase(a);
+        if (a != "off") // hover stili: büyütme tepesi ve yay sertliği/sönümü
+        {
+            if (hover == "gentle") { peak = .22f; springK = .06f; springD = .93f; spread = 1.8f; }
+            else if (hover == "bouncy") { peak = .5f; springK = .17f; springD = .6f; spread = 1.4f; }
+        }
+        Dirty = true;
+    }
+    void SetAnimBase(string a)
     {
         switch (a) { case "soft": peak = .26f; springK = .075f; springD = .88f; spread = 1.6f; tipK = .14f; prevK = .14f; break; case "off": peak = 0f; springK = .2f; springD = .7f; spread = 1.35f; tipK = .5f; prevK = .6f; break; default: peak = .40f; springK = .13f; springD = .78f; spread = 1.35f; tipK = .28f; prevK = .3f; break; }
         Dirty = true;

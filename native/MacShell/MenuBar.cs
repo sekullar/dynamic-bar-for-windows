@@ -125,7 +125,7 @@ class MenuWindow : Surface
     {
         br.Color = fg; Dc.DrawLine(new Vector2(cx - 4, cy + 2), new Vector2(cx, cy - 2), br, 1.6f, round); Dc.DrawLine(new Vector2(cx, cy - 2), new Vector2(cx + 4, cy + 2), br, 1.6f, round);
     }
-    static void TrayFlyout() // Windows'un gizli simgeler (sistem tepsisi) paneli: Win+B, ardından Enter
+    internal static void TrayFlyout() // Windows'un gizli simgeler (sistem tepsisi) paneli: Win+B, ardından Enter
     {
         Task.Run(() => { N.keybd_event(0x5B, 0, 0, 0); N.keybd_event(0x42, 0, 0, 0); N.keybd_event(0x42, 0, 2, 0); N.keybd_event(0x5B, 0, 2, 0); Thread.Sleep(350); N.keybd_event(0x0D, 0, 0, 0); N.keybd_event(0x0D, 0, 2, 0); });
     }
@@ -196,7 +196,7 @@ class MenuWindow : Surface
     {
         if (!PopOpen || hot < 0 || hot >= btns.Count) return; var b = btns[hot];
         if (b.Kind == "hm" && openId != b.Id) { openId = b.Id; OpenHm?.Invoke(b.I, b.X, b.W, b.Label); return; }
-        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win" || b.Kind == "wifi" || b.Kind == "bt" || b.Kind == "cc") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
+        if ((b.Kind == "apple" || b.Kind == "app" || b.Kind == "win" || b.Kind == "wifi" || b.Kind == "bt" || b.Kind == "bat" || b.Kind == "tray" || b.Kind == "cc") && openId != b.Id) { openId = b.Id; Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label }); }
     }
     protected override IntPtr Msg(uint m, IntPtr w, IntPtr l, out bool handled)
     {
@@ -217,8 +217,6 @@ class MenuWindow : Surface
                 {
                     int h = Hit(N.Lo(l) / Scale, N.Hi(l) / Scale); if (h < 0) return IntPtr.Zero; var b = btns[h]; pressed = true; Dirty = true;
                     if (b.Id == "clock") { Emit?.Invoke("macmenu:panel", null); return IntPtr.Zero; }
-                    if (b.Id == "bat") return IntPtr.Zero;
-                    if (b.Kind == "tray") { TrayFlyout(); return IntPtr.Zero; }
                     if (b.Kind == "hm") { openId = b.Id; PopOpen = true; OpenHm?.Invoke(b.I, b.X, b.W, b.Label); return IntPtr.Zero; }
                     openId = b.Id;
                     Emit?.Invoke("macmenu:open", new { kind = b.Kind, x = b.X, w = b.W, i = b.I, label = b.Label });

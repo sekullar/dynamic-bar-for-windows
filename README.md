@@ -36,6 +36,11 @@ açıp yazı yazar, iş bitince haber verir, izin isterken karar vermeni bardan 
 **Spotlight ve kargo**
 - **Spotlight araması:** Spotlight for Windows'ta "Dynamic Bar ile entegre ol" açıkken kısayol (Alt+Space) aramayı adada açar. Spotlight çalışıyor olmalı; yoksa kendi çubuğu açılır. `dynbar search` ile de açılır.
 - **Pyramid'e hızlı not:** Arama kutusuna `!!p notun metni` yazıp Enter'a basınca not Pyramid'in not klasörüne kaydedilir (ilk satır başlık olur). Pyramid kurulu değilse komut etkin olmaz, metin normal aranır.
+- **Pil paneli:** Pil simgesine tıklayınca güç modu (verimlilik / dengeli / performans), pil tasarrufu ve kalan süre. Güç modu Windows 11 gerektirir.
+- **Sistem tepsisi paneli:** Çalışan tepsi uygulamaları simgeleriyle listelenir; tıklayınca uygulama öne gelir, sağ tıklayınca uygulamanın kendi menüsü imlecin olduğu yerde açılır (Windows'un gizli simgeler paneline dayanır).
+- **Windows bildirimleri adada:** Ayarlardan açılır; masaüstü bildirimleri adada kart olur, istenirse Windows'un kendi balonu kapatılır.
+- **Barı ve Dock'u gizle:** Varsayılan Alt+Enter (Ayarlardan değişir); kenara gelince geçici belirir.
+- **Dock hover stili:** Normal, Çok yumuşak, Zıplamalı.
 - **Dört mod:** yüzen, yüzen (yalnızca masaüstünde), üste yapışık, yapışık (yalnızca masaüstünde). Yapışık modda ekranın üstünde görev çubuğu gibi yer ayrılır (Ayarlar > Üstte pencerelere yer bırak).
 - **Kargo:** Bir dosyayı sürükleyip adanın üstüne getir; hedefi seç (Drive/OneDrive/Dropbox klasörü, kendi klasörlerin, Telegram, Discord, WhatsApp), maskot götürür. Hedefler Ayarlar > Gönder'de. Komut satırından: `dynbar send dosya --to drive`.
   - Klasör hedefleri: Google Drive, OneDrive veya Dropbox masaüstü uygulaması kuruluysa içindeki `Dynamic Bar` alt klasörüne kopyalar.

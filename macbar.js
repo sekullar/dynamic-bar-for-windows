@@ -137,12 +137,39 @@ function reserve() {
   const a = menuBar.update(wantMenu() && !hiddenFs && !menuHide(), di, MENU_H), b = dockBar.update(wantDock() && !hiddenFs && !autoHide(), di, dockReserve());
   if (a || b) { [100, 400, 1000].forEach((t) => setTimeout(() => { place(); ctx.onReserve(); }, t)); } // Windows çalışma alanını değiştirirken pencereleri iter
 }
+// Elle gizleme (kısayol): imleç ekranın üstüne/altına dayanınca ilgili çubuk geçici belirir
+let fsHide = false, manHide = false, peek = '', peekAt = 0, peekT = null;
+const peeked = (w) => manHide && !fsHide && ((w === menuWin && peek === 'menu') || (w === dockWin && peek === 'dock'));
+function applyVis() {
+  [menuWin, dockWin].forEach((w) => { if (alive(w)) { if (hiddenFs && !peeked(w)) w.hide(); else if (w.webContents && !w.webContents.isLoading()) w.showInactive(); } });
+}
+function peekPoll() {
+  if (!(manHide && !fsHide) || !enabled()) { if (peek) { peek = ''; applyVis(); } return; }
+  if (ctx.settings().barsPeek === false) return;
+  const p = screen.getCursorScreenPoint(), b = display().bounds, now = Date.now(), inX = p.x >= b.x && p.x < b.x + b.width;
+  let want = peek;
+  if (!peek) {
+    const top = inX && p.y <= b.y, bot = inX && p.y >= b.y + b.height - 1;
+    if (top || bot) { if (!peekAt) peekAt = now; if (now - peekAt > 350) want = top ? 'menu' : 'dock'; } else peekAt = 0;
+  } else {
+    const r = peek === 'menu' ? rects().menu : rects().dock;
+    const inside = p.x >= r.x && p.x < r.x + r.width && p.y >= r.y - 8 && p.y < r.y + r.height + 8;
+    if (!inside && !nPopKey) { want = ''; peekAt = 0; }
+  }
+  if (want !== peek) { peek = want; applyVis(); }
+}
+function toggleBars() {
+  manHide = !manHide; peek = ''; peekAt = 0; hiddenFs = fsHide || manHide;
+  if (manHide && !peekT) peekT = setInterval(peekPoll, 120);
+  if (!manHide && peekT) { clearInterval(peekT); peekT = null; }
+  if (enabled()) sync();
+}
 function sync() {
   const r = rects();
   if (wantMenu()) { if (!alive(menuWin)) menuWin = useNative() ? new NatWin('menu', r.menu) : mk('macmenu.html', r.menu); } else if (alive(menuWin)) { menuWin.destroy(); menuWin = null; }
   if (wantDock()) { if (!alive(dockWin)) dockWin = useNative() ? new NatWin('dock', r.dock) : mk('macdock.html', r.dock); } else if (alive(dockWin)) { dockWin.destroy(); dockWin = null; }
   place();
-  [menuWin, dockWin].forEach((w) => { if (alive(w)) { if (hiddenFs) w.hide(); else if (w.webContents && !w.webContents.isLoading()) w.showInactive(); } });
+  applyVis();
   reserve();
   themeSig = ''; sig = '';
 }
@@ -197,7 +224,7 @@ function fetchIcon(key, exe, hwnd) {
   } catch (e) { ctx.log('pencere simgesi', e.message); }
   app.getFileIcon(exe, { size: 'large' }).then((img) => done(img.isEmpty() ? '' : img.toDataURL())).catch(() => done(''));
 }
-function pushPrefs() { if (alive(menuWin)) menuWin.webContents.send('prefs', { menuhide: menuHide(), anim: ctx.settings().macDockAnim || 'lively', island: Math.round(100 * clampN(ctx.settings().uiScale || 1, 0.8, 1.3)) + 4 }); if (alive(dockWin)) dockWin.webContents.send('prefs', { autohide: autoHide(), previews: ctx.settings().macDockPreview !== false, anim: ctx.settings().macDockAnim || 'lively' }); }
+function pushPrefs() { if (alive(menuWin)) menuWin.webContents.send('prefs', { menuhide: menuHide(), anim: ctx.settings().macDockAnim || 'lively', island: Math.round(100 * clampN(ctx.settings().uiScale || 1, 0.8, 1.3)) + 4 }); if (alive(dockWin)) dockWin.webContents.send('prefs', { autohide: autoHide(), previews: ctx.settings().macDockPreview !== false, anim: ctx.settings().macDockAnim || 'lively', hover: ctx.settings().macDockHover || 'normal' }); }
 const winByH = new Map();
 function deskOrder() { // masaüstlerinin sırası (kayıt defterinde birleşik GUID'ler)
   try {
@@ -504,7 +531,7 @@ function popDone() {
 }
 let darkAt = 0;
 const toNative = (it) => it.sep ? { sep: true } : it.media ? { media: true, label: it.label, sc: it.sc || '', value: it.value } : it.hd ? { hd: true, label: it.label } : it.slider ? { slider: true, id: it.id, icon: it.icon || '', value: it.value, ch: it.ch }
-  : { id: it.id, label: it.label, icon: it.icon || '', ricon: it.ricon || '', checked: !!it.checked, dis: !!it.dis, keep: !!it.keep };
+  : { id: it.id, label: it.label, icon: it.icon || '', ricon: it.ricon || '', checked: !!it.checked, dis: !!it.dis, keep: !!it.keep, img: it.img || '', rc: !!it.rc };
 function ccItems() { // Denetim Merkezi: ses/parlaklık kaydırıcıları ve kısayollar
   const st = ccState(), run = (exe, args) => () => { try { spawn(exe, args, { windowsHide: true, stdio: 'ignore', detached: true }).unref(); } catch {} };
   const a = [{ slider: true, id: 'vol', icon: st.muted ? '\uE74F' : '\uE767', value: st.vol, ch: 'maccc:vol' }];
@@ -566,8 +593,94 @@ function btItems() {
   a.push(SEP, act('bset', 'Bluetooth Ayarları…', () => shell.openExternal('ms-settings:bluetooth'), { icon: '\uE713' }));
   return a;
 }
+// ---------- Pil: güç modu ve pil tasarrufu (MacShell.exe --helper pwr, yalnızca panel açılınca çalışır) ----------
+let pwrProc = null, pwrState = null, pwrBusy = false, pwrIdleT = null;
+function pwrStart() {
+  if (pwrProc || !ctx.ps) return;
+  try {
+    pwrProc = ctx.ps('pwr.ps1'); pwrProc.stdin.on('error', () => {});
+    ctx.lines(pwrProc, (l) => {
+      const p = l.split(' ');
+      if (p[0] !== 'pwr') return;
+      pwrState = { pct: +p[1], ac: p[2] === '1', secs: +p[3], mode: +p[4], saver: p[5] === '1' }; pwrBusy = false; refreshPanes();
+    });
+    pwrProc.on('exit', () => { pwrProc = null; pwrBusy = false; });
+  } catch (e) { ctx.log('pwr', e.message); pwrProc = null; }
+}
+function pwrSend(c) {
+  pwrStart(); if (pwrProc && pwrProc.stdin.writable) { try { pwrProc.stdin.write(c + '\n'); } catch {} }
+  clearTimeout(pwrIdleT); pwrIdleT = setTimeout(() => { try { pwrProc && pwrProc.kill(); } catch {} pwrProc = null; }, 120000);
+}
+function batItems() {
+  const s = pwrState, a = [{ hd: true, label: 'Pil' }];
+  if (!s) return [...a, { id: 'pl', label: 'Okunuyor…', dis: true }];
+  const left = s.secs > 0 ? Math.floor(s.secs / 3600) + ' sa ' + Math.round((s.secs % 3600) / 60) + ' dk kalan' : '';
+  a.push({ id: 'pst', label: (s.pct >= 0 ? '%' + s.pct : 'Pil yok') + (s.ac ? ' · Şarjda / prizde' : ' · Pilde') + (!s.ac && left ? ' · ' + left : ''), dis: true });
+  if (s.mode >= 0) {
+    a.push(SEP, { hd: true, label: 'Güç modu' });
+    ['En iyi güç verimliliği', 'Dengeli', 'En iyi performans'].forEach((n, i) => a.push(act('pm' + i, n, () => { if (pwrBusy) return; pwrBusy = true; pwrSend('mode ' + i); }, { checked: s.mode === i, keep: true, dis: pwrBusy })));
+  }
+  a.push(SEP, act('psv', s.ac ? 'Pil tasarrufu (pilde etkin olur)' : 'Pil tasarrufu', () => { if (pwrBusy) return; pwrBusy = true; pwrSend('saver ' + (s.saver ? 0 : 1)); }, { checked: s.saver, keep: true, dis: pwrBusy }),
+    SEP, act('pset', 'Pil Ayarları…', () => shell.openExternal('ms-settings:batterysaver'), { icon: '\uE713' }));
+  return a;
+}
+// ---------- Sistem tepsisi paneli (MacShell.exe --helper tray; yalnızca panel açılınca çalışır) ----------
+let trProc = null, trList = null, trTmp = [], trIdleT = null;
+function trStart() {
+  if (trProc || !ctx.ps) return;
+  try {
+    trProc = ctx.ps('tray.ps1'); trProc.stdin.on('error', () => {});
+    ctx.lines(trProc, (l) => {
+      if (l.startsWith('tray|')) { const p = l.split('|'); trTmp.push({ exe: p[1], name: p.slice(2).join('|') }); return; }
+      if (l !== 'trayend') return;
+      trList = trTmp; trTmp = []; trList.forEach((t) => fetchIcon(lc(t.exe), t.exe)); refreshPanes(); setTimeout(refreshPanes, 500);
+    });
+    trProc.on('exit', () => { trProc = null; });
+  } catch (e) { ctx.log('tray', e.message); trProc = null; }
+}
+function trSend(c) {
+  trStart(); if (trProc && trProc.stdin.writable) { try { trProc.stdin.write(c + '\n'); } catch {} }
+  clearTimeout(trIdleT); trIdleT = setTimeout(() => { try { trProc && trProc.kill(); } catch {} trProc = null; }, 90000);
+}
+const rcActs = new Map();
+let trcProc = null, trcIdleT = null;
+function trcStop() { // önce (varsa) ekran dışındaki gizli simgeler panelini kapat, sonra süreci bitir
+  const p = trcProc; trcProc = null; clearTimeout(trcIdleT); if (!p) return;
+  try { p.stdin.write('close' + String.fromCharCode(10)); } catch {}
+  setTimeout(() => { try { p.kill(); } catch {} }, 700);
+}
+function trcStart() { // betik önceden başlatılır (PowerShell + UI Automation yüklemesi ~1 sn): sağ tık anında hazır bekler
+  if (trcProc) return;
+  try {
+    trcProc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ctx.unpacked(path.join(__dirname, 'scripts', 'trayclick.ps1'))], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    ctx.lines(trcProc, (l) => { if (l !== 'ready') ctx.log('trayclick', l); });
+    trcProc.stdin.on('error', () => {}); trcProc.on('error', () => {}); const me = trcProc; trcProc.on('exit', () => { if (trcProc === me) trcProc = null; });
+  } catch (e) { ctx.log('tepsi sağ tık', e.message); trcProc = null; }
+  clearTimeout(trcIdleT); trcIdleT = setTimeout(trcStop, 60000);
+}
+function trayContext(t) { // Windows'un gizli simgeler panelinde ilgili simgeye sağ tık: uygulamanın kendi menüsü imlecin olduğu yerde açılır
+  const w = wl.list().find((x) => lc(x.exe) === lc(t.exe) && x.title);
+  const names = [t.name, path.win32.basename(t.exe, '.exe'), w && w.title].filter(Boolean).join('|').replace(/\s+/g, ' ');
+  trcStart(); try { trcProc.stdin.write(names + String.fromCharCode(10)); } catch {}
+  clearTimeout(trcIdleT); trcIdleT = setTimeout(trcStop, 60000);
+}
+function trayOpen(t) { // uygulamanın penceresi varsa öne al, yoksa uygulamayı başlat (tepsi uygulamaları genelde mevcut örneği açar)
+  const w = wl.list().filter((x) => lc(x.exe) === lc(t.exe) && x.title).sort((a, b) => (b.active ? 1 : 0) - (a.active ? 1 : 0))[0];
+  if (w) goActivate(w.hwnd); else shell.openPath(t.exe).catch(() => {});
+}
+function trayItems() {
+  const a = [{ hd: true, label: 'Sistem tepsisi' }];
+  if (!trList) return [...a, { id: 'trl', label: 'Okunuyor…', dis: true }];
+  const list = trList.filter((t) => lc(t.exe) !== lc(process.execPath));
+  if (!list.length) a.push({ id: 'trn', label: 'Tepsi uygulaması yok', dis: true });
+  list.slice(0, 18).forEach((t, i) => { rcActs.set('t' + i, () => trayContext(t)); a.push(act('t' + i, t.name, () => trayOpen(t), { rc: true,  img: icons.get(lc(t.exe)) || '', icon: icons.get(lc(t.exe)) ? '' : '\uE71D' })); });
+  a.push(SEP, act('twin', 'Windows gizli simgeler…', () => { try { natSend('menu', 'menu:tray', true); } catch {} }, { icon: '\uE713' }));
+  return a;
+}
 function refreshPanes() {
   if (nPopKey.startsWith('bt')) natSend('pop', 'pop:update', { items: btItems().map(toNative) });
+  else if (nPopKey.startsWith('bat')) natSend('pop', 'pop:update', { items: batItems().map(toNative) });
+  else if (nPopKey.startsWith('tray')) natSend('pop', 'pop:update', { items: trayItems().map(toNative) });
   else if (nPopKey.startsWith('wifi')) natSend('pop', 'pop:update', { items: wifiItems(wifiCache ? wifiCache.d : null).map(toNative) });
 }
 let ccPopT = null;
@@ -581,16 +694,18 @@ function openNativePop(kind, m) { // menüler, Wi‑Fi, Denetim Merkezi: yerel (
   if (kind === 'apple') data = appleItems(); else if (kind === 'app') data = appItems(); else if (kind === 'win') data = windowItems();
   else if (kind === 'cc') { ccStart(); ccSend('get'); data = ccItems(); clearInterval(ccPopT); ccPopT = setInterval(() => { if (nPopKey.startsWith('cc')) refreshCcPop(); else clearInterval(ccPopT); }, 1500); }
   else if (kind === 'bt') { data = btItems(); btSend('bt'); }
+  else if (kind === 'bat') { data = batItems(); pwrSend('get'); }
+  else if (kind === 'tray') { data = trayItems(); trSend('list'); trcStart(); }
   else { // önbellekteki liste anında gösterilir, arkadan yenilenir
     btSend('hs'); if (wifiCache) regWifi(wifiCache.d);
     data = wifiItems(wifiCache ? wifiCache.d : null);
     wifiBusy = true; wifiData().then((d) => { if (nPopKey === key) natSend('pop', 'pop:update', { items: wifiItems(d).map(toNative) }); }).catch(() => {}).finally(() => { wifiBusy = false; });
   }
   if (Date.now() - darkAt > 5000) { readDark(); darkAt = Date.now(); }
-  nPopKey = key; natSend('pop', 'pop:open', { items: data.map(toNative), key, dark: !!(kind === 'cc' ? ccState().dark : darkNow), x: m.x, w: m.w, right: kind === 'wifi' || kind === 'cc' || kind === 'bt' });
+  nPopKey = key; natSend('pop', 'pop:open', { items: data.map(toNative), key, dark: !!(kind === 'cc' ? ccState().dark : darkNow), x: m.x, w: m.w, right: kind === 'wifi' || kind === 'cc' || kind === 'bt' || kind === 'bat' || kind === 'tray' });
 }
 async function openPop(kind, m) {
-  if (['apple', 'app', 'win', 'wifi', 'bt', 'cc'].includes(kind) && menuWin instanceof NatWin) { try { return openNativePop(kind, m); } catch (e) { ctx.log('yerel panel', e.stack || e.message); return; } }
+  if (['apple', 'app', 'win', 'wifi', 'bt', 'bat', 'tray', 'cc'].includes(kind) && menuWin instanceof NatWin) { try { return openNativePop(kind, m); } catch (e) { ctx.log('yerel panel', e.stack || e.message); return; } }
   const view = kind === 'cc' ? 'cc' : kind === 'wifi' ? 'wifi' : 'menu', key = kind + (m.i ?? '') + (m.label || '');
   const visible = alive(popWin) && popWin.isVisible() && !!pop && !popClosing;
   if (visible && pop.key === key) return closePop();
@@ -640,15 +755,16 @@ function stop() {
   if (wifiTimer) { clearInterval(wifiTimer); wifiTimer = null; }
   try { natSend('pop', 'pop:close', true); } catch {}
   if (timer) { clearInterval(timer); timer = null; }
+  if (peekT) { clearInterval(peekT); peekT = null; } manHide = false; peek = ''; hiddenFs = fsHide;
   [menuWin, dockWin, popWin].forEach((w) => { if (alive(w)) w.destroy(); }); menuWin = dockWin = popWin = null; popReady = false; pop = null;
-  [ccProc, menusProc, btProc].forEach((p) => { if (p) { try { p.kill(); } catch {} } }); ccProc = menusProc = btProc = null; clearTimeout(btIdleT); menusReady = false;
+  trcStop(); [ccProc, menusProc, btProc, pwrProc].forEach((p) => { if (p) { try { p.kill(); } catch {} } }); ccProc = menusProc = btProc = pwrProc = null; clearTimeout(btIdleT); menusReady = false;
   target = null; menuSig = '';
   menuBar.remove(); dockBar.remove();
   restoreTaskbar();
   sig = activeSig = themeSig = '';
 }
 function setFullscreen(v) {
-  v = !!v; if (v === hiddenFs) return; hiddenFs = v;
+  v = !!v; if (v === fsHide) return; fsHide = v; hiddenFs = fsHide || manHide;
   if (enabled()) sync();
 }
 function reassert() { // adanın moveTop'undan önce çağrılır; ada her zaman bunların üstünde kalır
@@ -672,6 +788,7 @@ function init(c) {
     if (list.length) try { dockWin.setShape(list); } catch {}
   });
   ipcMain.on('macmenu:ready', () => { themeSig = ''; pushTheme(); menuSig = ''; pushMenus(); pushPrefs(); const b = dockBackdrop(); if (b && alive(menuWin)) menuWin.webContents.send('macdock:bd', b); });
+  ipcMain.on('macpop:ract', (_e, id) => { nPopKey = ''; const f = rcActs.get(id); if (f) setTimeout(() => { try { f(); } catch (e) { ctx.log('sağ tık eylemi', e.message); } }, 120); });
   ipcMain.on('macpop:nact', (_e, id) => { if (keepIds.has(id)) { const f = popActs.get(id); if (f) try { f(); } catch (e) { ctx.log('menü eylemi', e.message); } return; } nPopKey = ''; const fn = popActs.get(id); if (fn) setTimeout(() => { try { fn(); } catch (e) { ctx.log('menü eylemi', e.message); } }, 80); });
   ipcMain.on('macpop:nclosed', () => { nPopKey = ''; popHiddenAt = Date.now(); clearInterval(ccPopT); });
   ipcMain.on('maccc:media', () => setTimeout(refreshCcPop, 500));
@@ -690,7 +807,7 @@ function init(c) {
   ipcMain.on('macmenu:open', (_e, m) => {
     if (!m || typeof m.kind !== 'string') return;
     if (m.kind === 'uia') { if (target && Number.isInteger(m.i)) menusSend('open ' + target.hwnd + ' ' + m.i); return; }
-    if (['apple', 'app', 'win', 'wifi', 'bt', 'cc'].includes(m.kind)) openPop(m.kind, { x: +m.x || 0, w: +m.w || 0, i: m.i, label: String(m.label || '') });
+    if (['apple', 'app', 'win', 'wifi', 'bt', 'bat', 'tray', 'cc'].includes(m.kind)) openPop(m.kind, { x: +m.x || 0, w: +m.w || 0, i: m.i, label: String(m.label || '') });
   });
   ipcMain.on('macpop:ready', () => { popReady = true; });
   ipcMain.on('macpop:size', (_e, d) => { if (d && d.w > 0 && d.h > 0) placePop(Math.ceil(d.w), Math.ceil(d.h)); });
@@ -719,4 +836,4 @@ function init(c) {
   ipcMain.on('maccc:settings', () => { closePop(); ctx.openSettings(); });
 }
 
-module.exports = { init, apply, stop, setFullscreen, reassert, onWorkspaceSwitch, menuActive: () => enabled() && wantMenu() && !hiddenFs };
+module.exports = { init, apply, stop, setFullscreen, toggleBars, reassert, onWorkspaceSwitch, menuActive: () => enabled() && wantMenu() && !hiddenFs };
