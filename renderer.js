@@ -202,8 +202,8 @@
   let shapeT, shapeArea = 0;
   function syncShape() {
     const ui = cfg.uiScale || 1, [w, h] = SZ[isOpen() ? 'o' : island.classList.contains('ask') ? 'a' : island.classList.contains('expanded') ? 'e' : 'c'];
-    const top = document.body.dataset.mode === 'dock' ? 0 : (cfg.offsetY ?? 10), W = window.innerWidth, pad = 14;
-    const rect = { x: Math.max(0, Math.round((W - w * ui) / 2) - pad), y: 0, width: Math.min(W, Math.round(w * ui) + pad * 2), height: Math.round((top + h) * ui) + 16 };
+    const top = document.body.dataset.mode === 'dock' ? 0 : (cfg.offsetY ?? 10), W = window.innerWidth, pad = 4; // pay dar tutulur: ada dışında kalan görünmez bölge Chrome sekmeleri gibi altındaki uygulamaların tıklamasını yutuyordu
+    const rect = { x: Math.max(0, Math.round((W - w * ui) / 2) - pad), y: 0, width: Math.min(W, Math.round(w * ui) + pad * 2), height: Math.round((top + h) * ui) + 3 };
     const area = rect.width * rect.height, apply = () => { shapeArea = area; dynbar.send('shape', rect); };
     clearTimeout(shapeT);
     if (area >= shapeArea) apply(); else shapeT = setTimeout(apply, 900); // küçülürken animasyon bitsin
