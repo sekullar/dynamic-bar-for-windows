@@ -80,4 +80,30 @@ function windowDesktop(h) {
   if (process.platform !== 'win32' || !init()) return null;
   try { const b = Buffer.alloc(16); if (slot(mgr, 4, P_Id, BigInt(h), b) !== 0 || b.every((x) => x === 0)) return null; return str(b); } catch { return null; }
 }
-module.exports = { isOnCurrent, windowDesktop, moveHere, guid, _slot: slot, _setKoffi: (k) => (K = k) };
+// Doğrudan masaüstü geçişi (belgelenmemiş IVirtualDesktopManagerInternal, Windows 11 24H2/25H2 düzeni): uzaktaki masaüstüne
+// Win+Ctrl+ok ile tek tek geçmek yerine Windows'un kendi kayma animasyonuyla tek hamlede gider. Arayüz bulunamazsa false döner.
+let vdmi = null, P_Find = null, P_Sw = null, vdmiFail = false;
+function internalMgr() {
+  if (vdmi) return vdmi; if (vdmiFail) return null;
+  try {
+    if (!init()) { vdmiFail = true; return null; }
+    const ole = K.load('ole32.dll');
+    const P_QS = K.proto('long __stdcall VdiQS(void *self, const void *svc, const void *iid, _Out_ void **out)');
+    P_Find = K.proto('long __stdcall VdiFind(void *self, const void *id, _Out_ void **out)');
+    P_Sw = K.proto('long __stdcall VdiSwitch(void *self, void *desk)');
+    const sp = [null];
+    if (CoCreate(guid('C2F03A33-21F5-47FA-B4BB-156362A2F239'), null, 4, guid('6D5140C1-7436-11CE-8034-00AA006009FA'), sp) !== 0 || !sp[0]) { vdmiFail = true; return null; } // CLSID_ImmersiveShell, IServiceProvider
+    const o = [null];
+    if (slot(sp[0], 3, P_QS, guid('C5E0CDCA-7B6E-41B2-9FC4-D93975CC467B'), guid('53F5CA0B-158F-4124-900C-057158060B27'), o) !== 0 || !o[0]) { vdmiFail = true; return null; }
+    vdmi = o[0]; return vdmi;
+  } catch { vdmiFail = true; return null; }
+}
+function switchDesktop(guidStr) {
+  if (process.platform !== 'win32') return false;
+  const g = guid(guidStr), m = g && internalMgr(); if (!m) return false;
+  try {
+    const d = [null]; if (slot(m, 14, P_Find, g, d) !== 0 || !d[0]) return false; // FindDesktop
+    return slot(m, 10, P_Sw, d[0]) === 0; // SwitchDesktop
+  } catch { return false; }
+}
+module.exports = { isOnCurrent, windowDesktop, moveHere, switchDesktop, guid, _slot: slot, _setKoffi: (k) => (K = k) };

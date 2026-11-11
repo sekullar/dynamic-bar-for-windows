@@ -95,7 +95,8 @@ function pollClick(inside) {
   if (down && !btnDown && inside) {
     const t = Date.now(), p = screen.getCursorScreenPoint(), bb = win.getBounds();
     setTimeout(() => { // sayfa 120 ms içinde mousedown almadıysa (4 parmakla masaüstüne dönüş sonrası olur) tıklamayı biz ilet
-      if (lastDomClick < t && alive(win) && win.isVisible()) { try { win.webContents.send('synthetic-click', { x: p.x - bb.x, y: p.y - bb.y }); } catch {} }
+      // DOM zaten tıklamayı aldıysa (basıştan önce ya da sonra) sentetik tıklama gönderme: çift tetiklenirdi
+      if (lastDomClick < t - 250 && alive(win) && win.isVisible()) { try { win.webContents.send('synthetic-click', { x: p.x - bb.x, y: p.y - bb.y }); } catch {} }
     }, 120);
   }
   btnDown = down;
@@ -365,16 +366,22 @@ function handleAsk(req, res) {
   req.on('end', () => {
     let o = {}; try { o = JSON.parse(body || '{}'); } catch {}
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6), secs = clamp(+o.timeout || 60, 5, 300);
+    // Çoktan seçmeli soru: o.options [{label}] (en çok 6); o.multi çoklu seçim. Yanıt "0".."5", "sel:0,2" ya da "terminal"
+    const opts = Array.isArray(o.options) ? o.options.slice(0, 6).map((x, i) => ({ id: String(i), label: String((x && x.label) != null ? x.label : x).slice(0, 48) })).filter((x) => x.label) : [];
     const finish = (answer) => {
       const x = asks.get(id); if (!x) return; asks.delete(id); clearTimeout(x.timer);
       try { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ answer })); } catch {}
       if (alive(win)) win.webContents.send('dismiss', { key: 'ask-' + id });
     };
-    asks.set(id, { finish, timer: setTimeout(() => finish('timeout'), secs * 1000) });
+    asks.set(id, { finish, custom: opts.length > 0, timer: setTimeout(() => finish('timeout'), secs * 1000) });
     res.on('close', () => finish('closed')); // hook öldüyse (terminalden yanıtlandı) bildirimi kaldır
     if (!alive(win) || settings.claudeAsk === false) return finish('unavailable');
     const a = sanitize({ title: o.title || 'Claude Code onay istiyor', text: o.text || '', icon: '🔐', mood: 'alert', app: 'Claude Code', priority: 'high', sticky: true, key: 'ask-' + id });
-    a.actions = [{ id: 'allow', label: 'Onayla' }, { id: 'deny', label: 'Reddet' }]; a.askId = id; a.ttl = secs;
+    if (opts.length) {
+      a.icon = '❓'; a.askQ = true; a.askMulti = !!o.multi;
+      a.actions = [...opts.map((x) => ({ ...x, opt: true })), ...(o.multi ? [{ id: 'submit', label: 'Tamam' }] : []), { id: 'terminal', label: 'Ana ekranda yanıtla', term: true }];
+    } else a.actions = [{ id: 'allow', label: 'Onayla' }, { id: 'deny', label: 'Reddet' }];
+    a.askId = id; a.ttl = secs;
     send(a);
   });
 }
@@ -391,7 +398,9 @@ ipcMain.on('notif-action', (_e, d) => { // bildirim düğmesi: göndericiye habe
   fetch(c.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: d.action.slice(0, 20), data: c.data, ...(typeof d.text === 'string' && d.text ? { text: d.text.slice(0, 2000) } : {}) }), signal: AbortSignal.timeout(3000) }).catch(() => {});
 });
 ipcMain.on('ask-answer', (_e, d) => {
-  const x = d && asks.get(d.id); if (x) x.finish(d.answer === 'allow' || d.answer === 'deny' ? d.answer : 'dismissed');
+  const x = d && asks.get(d.id); if (!x) return; const ans = String(d.answer || '');
+  if (x.custom) x.finish(/^(terminal|[0-5]|sel:[0-5](,[0-5])*)$/.test(ans) ? ans : 'dismissed');
+  else x.finish(ans === 'allow' || ans === 'deny' ? ans : 'dismissed');
 });
 
 // Spotlight araması: POST /search {mode: "toggle"|"open"|"close"}. Spotlight kısayola basılınca çağırır. Spotlight yoksa 503 döner

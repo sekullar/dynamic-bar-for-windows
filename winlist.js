@@ -29,6 +29,8 @@ function init() {
       GetForegroundWindow: u.func('uintptr_t __stdcall GetForegroundWindow()'),
       SetForegroundWindow: u.func('bool __stdcall SetForegroundWindow(uintptr_t h)'),
       BringWindowToTop: u.func('bool __stdcall BringWindowToTop(uintptr_t h)'),
+      SetWindowPos: u.func('bool __stdcall SetWindowPos(uintptr_t h, intptr_t after, int x, int y, int cx, int cy, uint32_t flags)'),
+      AllowSetForegroundWindow: u.func('bool __stdcall AllowSetForegroundWindow(uint32_t pid)'),
       ShowWindow: u.func('bool __stdcall ShowWindow(uintptr_t h, int cmd)'),
       PostMessageW: u.func('bool __stdcall PostMessageW(uintptr_t h, uint32_t msg, uintptr_t w, intptr_t l)'),
       AttachThreadInput: u.func('bool __stdcall AttachThreadInput(uint32_t a, uint32_t b, bool attach)'),
@@ -122,8 +124,14 @@ function activate(h) {
   const fg = f.GetForegroundWindow(), ft = fg ? f.GetWindowThreadProcessId(fg, [0]) : 0, me = f.GetCurrentThreadId();
   let att = false;
   if (ft && ft !== me) att = f.AttachThreadInput(me, ft, true);
+  try { f.AllowSetForegroundWindow(0xFFFFFFFF); } catch {} // ASFW_ANY
+  f.keybd_event(0x12, 0, 0, 0); f.keybd_event(0x12, 0, 2, 0); // Alt'a basıp bırakmak ön plan kilidini açar (Windows arka plana atmasın)
   f.BringWindowToTop(h); f.SetForegroundWindow(h);
   if (att) f.AttachThreadInput(me, ft, false);
+  if (Number(f.GetForegroundWindow()) !== Number(h)) { // hâlâ arkada kaldıysa: bir an en üste alıp bırak (Z sırasında öne çıkar)
+    f.SetWindowPos(h, -1, 0, 0, 0, 0, 0x53); f.SetWindowPos(h, -2, 0, 0, 0, 0, 0x53); // HWND_TOPMOST sonra HWND_NOTOPMOST; NOMOVE|NOSIZE|SHOWWINDOW|NOACTIVATE
+    f.SetForegroundWindow(h);
+  }
 }
 // Win+Ctrl+Sol/Sağ: Windows'un kendi kayma animasyonuyla komşu masaüstüne geçer
 function deskKey(dir) {

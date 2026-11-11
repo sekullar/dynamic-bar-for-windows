@@ -85,6 +85,29 @@ function aiSummary(text) {
   });
 }
 
+// Claude'un çoktan seçmeli soruları (AskUserQuestion): her soru barda seçenek düğmeleriyle sorulur, yanıtlar Claude'a verilir.
+// "Ana ekranda yanıtla" ya da zaman aşımı: sessiz çıkılır, soru terminalde normal şekilde sorulur.
+async function askQuestions(h) {
+  const qs = Array.isArray(h.tool_input && h.tool_input.questions) ? h.tool_input.questions : [];
+  if (!qs.length || qs.length > 4) return;
+  const t0 = Date.now(), answers = {};
+  for (const q of qs) {
+    const opts = (Array.isArray(q.options) ? q.options : []).map((o) => String(o && o.label != null ? o.label : o)).filter(Boolean).slice(0, 6);
+    if (!opts.length || !q.question) return;
+    const left = 55 - Math.round((Date.now() - t0) / 1000); // Claude Code kancası ~60 sn'de zaman aşımına uğrar
+    if (left < 8) return;
+    const r = await post('/ask', { title: String(q.header || 'Claude soruyor').slice(0, 40), text: String(q.question).slice(0, 240), options: opts.map((label) => ({ label })), multi: !!q.multiSelect, timeout: left }, (left + 5) * 1000);
+    let a = ''; try { a = JSON.parse(r).answer; } catch {}
+    let picked = [];
+    if (/^\d+$/.test(a)) picked = [opts[+a]];
+    else if (/^sel:[\d,]+$/.test(a)) picked = a.slice(4).split(',').map((i) => opts[+i]);
+    picked = picked.filter(Boolean);
+    if (!picked.length) return; // terminal / zaman aşımı / reddedildi: terminaldeki soru geçerli kalır
+    answers[q.question] = picked.join(', ');
+  }
+  process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'allow', updatedInput: { ...h.tool_input, answers } } } }));
+}
+
 async function main() {
   let h = {}; try { h = JSON.parse(raw); } catch {}
   const ev = h.hook_event_name || process.argv[2];
@@ -112,6 +135,7 @@ async function main() {
       : { title: 'Claude Code bitirdi', text: sum || proj, icon: '✅', mood: 'claude', ttl: 6, app: proj, stat: 'done' });
   } else if (ev === 'PermissionRequest') {
     if (!cfg.ask) return;
+    if (h.tool_name === 'AskUserQuestion') return askQuestions(h);
     const [what, detail] = label(h.tool_name, h.tool_input);
     const r = await post('/ask', { title: 'Claude izin istiyor', text: detail ? what + ': ' + detail : what, timeout: 60 }, 65000);
     let answer = ''; try { answer = JSON.parse(r).answer; } catch {}

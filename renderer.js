@@ -5,6 +5,7 @@
   let dots = [], pages = [], cur = null, cfg = {}, hist = [], focusOn = false, ac = null, lastCur = null, armed = false, leaveT = 0;
   let ambient = null, morphT, queue = [], busy = false, sleepT, timerT, nextT, closeT, hoverT, page = 0, wheelSum = 0, lastWheel = 0;
   let typing = null; // satır içi yanıt yazılıyor: {a, x}
+  let askH = 112; // onay / çoktan seçmeli soru adasının yüksekliği (tıklama bölgesi için)
   let playing = false, primed = false, lastKey, swipe = 160, toasts = true, locked = false, media = {}, lastD = 0, lockAt = 0;
   const setMood = (m) => { mascot.dataset.mood = m; mascot.dataset.sub = ''; };
   let miniClaude = false, lastDown = 0, subT;
@@ -90,15 +91,24 @@
     island.classList.toggle('parcel', !!a.parcel); island.classList.toggle('delivered', !!(a.parcel && a.parcel.done)); // kargo: paket yolda, hedef simgesi uçta
     const rd = $('#rdest'); rd.textContent = a.parcel ? a.parcel.icon || '📁' : '';
     if (a.parcel && a.parcel.done) { rd.classList.remove('pop'); void rd.offsetWidth; rd.classList.add('pop'); }
-    const acts = $('#acts'); acts.innerHTML = ''; island.classList.toggle('ask', !!a.actions);
+    const acts = $('#acts'); acts.innerHTML = ''; island.classList.toggle('ask', !!a.actions); island.classList.toggle('askq', !!a.askQ);
+    if (a.askQ) { // çoktan seçmeli soru: soru metni (en çok 3 satır) + iki sütun seçenek + "ana ekranda yanıtla"
+      const n = (a.actions || []).filter((x) => !x.term).length, lines = Math.min(3, Math.max(1, Math.ceil(String(a.text || '').length / 44)));
+      askH = 24 + 24 + lines * 17 + 10 + (Math.ceil(n / 2) + 1) * 36 + 12; island.style.setProperty('--ask-h', askH + 'px');
+    } else askH = 112;
     (a.actions || []).forEach((x) => {
-      const b = document.createElement('button'); b.textContent = x.label; b.dataset.a = x.id;
+      const b = document.createElement('button'); b.textContent = x.label; b.dataset.a = x.id; if (x.opt) b.classList.add('opt'); if (x.term) b.classList.add('term'); if (x.id === 'submit') b.classList.add('submit');
       b.addEventListener('mousedown', (e) => {
         e.stopPropagation();
+        let ans = x.id;
+        if (a.askMulti && !a.answered) { // çoklu seçim: seçenekler işaretlenir, "Tamam" hepsini gönderir
+          if (x.opt) { b.classList.toggle('on'); return; }
+          if (x.id === 'submit') { const sel = [...acts.querySelectorAll('button.opt.on')].map((e2) => e2.dataset.a); if (!sel.length) return; ans = 'sel:' + sel.join(','); }
+        }
         if (x.input && a.cbId && !a.answered) { startTyping(a, x); return; }
         if (x.keep) { if (a.cbId) dynbar.send('notif-action', { cbId: a.cbId, action: x.id }); return; } // kalıcı düğme (ör. hoparlör): bildirim açık kalır
         if (a.answered) return; a.answered = true; // çift tetiklenmeye karşı
-        if (a.onAction) a.onAction(x.id); else if (a.cbId) dynbar.send('notif-action', { cbId: a.cbId, action: x.id }); else dynbar.send('ask-answer', { id: a.askId, answer: x.id }); // yerel eylem (su içme), gönderene geri çağrı ya da ana süreçteki onay
+        if (a.onAction) a.onAction(x.id); else if (a.cbId) dynbar.send('notif-action', { cbId: a.cbId, action: x.id }); else dynbar.send('ask-answer', { id: a.askId, answer: ans }); // yerel eylem (su içme), gönderene geri çağrı ya da ana süreçteki onay
         next();
       });
       b.addEventListener('click', (e) => e.stopPropagation()); // mousedown sonrası gelen click adaya ulaşıp paneli açmasın
@@ -201,7 +211,7 @@
   const SZ = { c: [112, 36], e: [400, 78], a: [400, 112], o: [420, 136] };
   let shapeT, shapeArea = 0;
   function syncShape() {
-    const ui = cfg.uiScale || 1, [w, h] = SZ[isOpen() ? 'o' : island.classList.contains('ask') ? 'a' : island.classList.contains('expanded') ? 'e' : 'c'];
+    const ui = cfg.uiScale || 1, kind = isOpen() ? 'o' : island.classList.contains('ask') ? 'a' : island.classList.contains('expanded') ? 'e' : 'c', w = SZ[kind][0], h = kind === 'a' ? askH : SZ[kind][1];
     const top = document.body.dataset.mode === 'dock' ? 0 : (cfg.offsetY ?? 10), W = window.innerWidth, pad = 4; // pay dar tutulur: ada dışında kalan görünmez bölge Chrome sekmeleri gibi altındaki uygulamaların tıklamasını yutuyordu
     const rect = { x: Math.max(0, Math.round((W - w * ui) / 2) - pad), y: 0, width: Math.min(W, Math.round(w * ui) + pad * 2), height: Math.round((top + h) * ui) + 3 };
     const area = rect.width * rect.height, apply = () => { shapeArea = area; dynbar.send('shape', rect); };

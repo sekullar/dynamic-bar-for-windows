@@ -179,6 +179,14 @@
   #acts button[data-a=allow], #acts button[data-a=answer] { background:#2f9e5b; } #acts button[data-a=deny], #acts button[data-a=reject], #acts button[data-a=hangup] { background:#c84b4b; }
   #acts button:hover { filter:brightness(1.15); }
   #island.ask { height:112px; } #island.ask #acts { display:flex; }
+  /* çoktan seçmeli soru (Claude Code AskUserQuestion): soru metni sarılır, seçenekler iki sütun, altta "ana ekranda yanıtla" */
+  #island.askq { height:var(--ask-h,160px); }
+  #island.askq #text { white-space:normal; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; line-height:1.35; }
+  #island.askq #acts { flex-wrap:wrap; }
+  #island.askq #acts button { flex:1 1 calc(50% - 4px); min-width:0; padding:7px 10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
+  #island.askq #acts button.on { background:var(--body); color:#2a1a24; }
+  #island.askq #acts button.submit { background:#2f9e5b; flex-basis:100%; }
+  #island.askq #acts button.term { flex-basis:100%; background:transparent; border:1px solid #ffffff2e; font-weight:500; color:#ffffffb8; }
   #replybox { display:none; gap:8px; margin-top:8px; pointer-events:auto; }
   #island.typing #acts { display:none; } #island.typing #replybox { display:flex; }
   #rin { flex:1; min-width:0; background:#ffffff1c; color:#fff; border:1px solid #ffffff30; border-radius:10px; padding:6px 10px; font:inherit; font-size:13px; outline:none; user-select:text; }

@@ -248,6 +248,11 @@ function curDesk() { // geçerli masaüstündeki pencerelerin çoğunluğunun ki
 function goActivate(h) { // başka masaüstündeki pencere: o masaüstüne Windows animasyonuyla git, sonra pencereyi öne al
   const w = winByH.get(String(h));
   if (!w || !w.other) return wl.activate(h);
+  // Windows tek hamlede uzak masaüstüne kayma animasyonu sunmuyor (denendi: doğrudan geçiş animasyonsuz, karma geçiş sert):
+  // Win+Ctrl+ok ile masaüstü masaüstü Windows'un kendi kayma animasyonuyla geçilir.
+  stepActivate(w, h);
+}
+function stepActivate(w, h) { // yedek: Win+Ctrl+ok ile komşu masaüstlerine tek tek geç
   const ids = deskOrder(), ti = ids.indexOf(w.desk), ci = ids.indexOf(curDesk());
   if (ti < 0 || ci < 0 || ti === ci) return wl.activate(h);
   const dir = ti > ci ? 'right' : 'left', n = Math.abs(ti - ci); let i = 0;
@@ -308,7 +313,21 @@ function poll() {
   if (tick % 40 === 1) { const bw = alive(dockWin) ? dockWin : alive(menuWin) ? menuWin : null, b = bw && dockBackdrop(); if (b) bw.webContents.send('macdock:bd', b); }
 }
 
-function openApp(p) { shell.openPath(p).then((err) => { if (err) ctx.log('Dock: açılamadı', p, err); }); }
+function openApp(p) {
+  // Açılan uygulamanın penceresi çoğu zaman mevcut pencerenin arkasında belirir (Windows arka plandan başlatılanı öne almaz):
+  // başlatmadan önceki pencereleri hatırla, yeni pencere belirince öne al
+  const before = new Set(); try { for (const w of wl.list()) if (lc(w.exe) === lc(p)) before.add(String(w.hwnd)); } catch {}
+  shell.openPath(p).then((err) => { if (err) ctx.log('Dock: açılamadı', p, err); });
+  let n = 0, done = 0;
+  const t = setInterval(() => {
+    if (++n > 50 || done) { clearInterval(t); return; } // en çok ~12 sn bekle
+    try {
+      const w = wl.list().find((x) => lc(x.exe) === lc(p) && x.title && !x.other && !before.has(String(x.hwnd)));
+      if (!w) return;
+      done = 1; wl.activate(w.hwnd); setTimeout(() => wl.activate(w.hwnd), 400); setTimeout(poll, 200); // pencere kurulurken bir kez daha
+    } catch {}
+  }, 250);
+}
 function click(key) {
   const x = groups.get(key);
   if (!x) { const p = pins().find((q) => lc(q) === key); if (p) openApp(p); return; }
