@@ -2,14 +2,22 @@
   const $ = (s) => document.querySelector(s), api = window.barApi, island = $('#island'), mascot = $('#mascot');
   const pad = (n) => String(n).padStart(2, '0'), mmss = (s) => pad(Math.floor(s / 60)) + ':' + pad(s % 60);
   let S = {}, ev0 = [];
+  // boş durum şablonu: soluk simge, başlık, yönlendirici ipucu (yalnızca sabit metin; kullanıcı verisi içermez)
+  const est = (ic, t, h, solo) => `<div class="est${solo ? ' card' : ''}"><i>${ic}</i><b>${t}</b><span>${h}</span></div>`;
+  const setEst = (box, ic, t, h, solo) => { box.classList.add('isempty'); box.innerHTML = est(ic, t, h, solo); };
 
   // --- sistem ---
   const stat = (id, v) => { $('#s' + id).style.width = v + '%'; $('#s' + id + 'v').textContent = v + '%'; };
-  dynbar.on('sys', (d) => { stat('cpu', d.cpu); stat('mem', d.mem); });
+  const gb = (v) => v.toFixed(1).replace('.', ',');
+  dynbar.on('sys', (d) => {
+    stat('cpu', d.cpu); stat('mem', d.mem);
+    if (d.cores) $('#scpud').textContent = d.cores + ' mantıksal çekirdek';
+    if (d.memTotal) $('#smemd').textContent = gb(d.memUsed) + ' / ' + gb(d.memTotal) + ' GB';
+  });
   if (navigator.getBattery) navigator.getBattery().then((b) => {
     let low = !b.charging && b.level <= .2, full = b.charging && b.level >= 1, was = b.charging; // başlangıçta gereksiz uyarı verme
     const u = () => {
-      const lv = Math.round(b.level * 100); stat('bat', lv); $('#sbatv').textContent = lv + '%' + (b.charging ? '⚡' : '');
+      const lv = Math.round(b.level * 100); stat('bat', lv); $('#sbatv').textContent = lv + '%'; $('#sbatc').style.display = ''; $('.scards').classList.add('hasbat'); $('#sbatd').textContent = b.charging ? 'Şarj oluyor' : 'Pilde';
       if (S.batteryToasts === false) return;
       if (!b.charging && lv <= 20 && !low) { low = true; api.enqueue({ title: 'Pil azaldı', text: '%' + lv + ' kaldı · enerjim bitiyor, şarja tak 🔌', mood: 'lowbat', ttl: 6 }); }
       if (b.charging || lv > 25) low = false;
@@ -21,35 +29,74 @@
     u(); ['levelchange', 'chargingchange'].forEach((ev) => b.addEventListener(ev, u));
   });
 
-  // --- pano ---
+  // --- pano + hızlı not ---
+  const rel = (at) => { const m = Math.floor((Date.now() - at) / 60000); return m < 1 ? 'Şimdi' : m < 60 ? m + ' dk önce' : m < 1440 ? Math.floor(m / 60) + ' sa önce' : Math.floor(m / 1440) + ' gün önce'; };
+  const kindOf = (x) => { const t = x.t.trim();
+    if (x.note) return ['Not', 'note'];
+    if (/^(https?:\/\/|www\.)\S+$/i.test(t)) return ['Bağlantı', 'link'];
+    if (/^[\w-]+\s*:\s*[^;{}]+;|[{;]\s*$|^[.#]?[\w-]+\s*\{/.test(t) && !/\b(function|const|let|var|import|return)\b|=>/.test(t)) return ['CSS', 'css'];
+    if (/\b(function|const|let|var|import|return|class)\b|=>|<\/?\w+>/.test(t)) return ['Kod', 'code'];
+    return ['Metin', 'text']; };
+  let clipList = [];
   const drawClips = (list) => {
-    const box = $('#clips'); box.innerHTML = '';
-    if (!list.length) { box.innerHTML = '<div class="sub">Henüz kopyalanan bir şey yok</div>'; return; }
-    list.slice(0, 3).forEach((t, i) => {
-      const b = document.createElement('button'); b.textContent = t.replace(/\s+/g, ' ').slice(0, 80);
-      b.onclick = () => { dynbar.send('clip:copy', i); b.textContent = 'Kopyalandı ✓'; setTimeout(() => drawClips(list), 900); };
-      box.append(b);
+    clipList = list || [];
+    const box = $('#clips'); box.innerHTML = ''; box.classList.remove('isempty');
+    if (!clipList.length) return setEst(box, '📋', 'Pano geçmişi boş', 'Kopyaladığın metinler burada listelenir');
+    clipList.forEach((x, i) => {
+      const [name, k] = kindOf(x), d = document.createElement('div'); d.className = 'ci'; d.title = x.t.slice(0, 600);
+      d.innerHTML = '<div class="cm"><span class="tg"></span><span class="ag"></span><span class="cp">Kopyala</span></div><div class="cx"></div>';
+      d.querySelector('.tg').textContent = name; d.querySelector('.tg').dataset.k = k; d.querySelector('.ag').textContent = rel(x.at);
+      d.querySelector('.cx').textContent = x.t.replace(/\s+/g, ' ').slice(0, 160);
+      d.onclick = () => { dynbar.send('clip:copy', i); const cp = d.querySelector('.cp'); cp.textContent = 'Kopyalandı ✓'; d.classList.add('done'); setTimeout(() => { cp.textContent = 'Kopyala'; d.classList.remove('done'); }, 1100); };
+      box.append(d);
     });
   };
   dynbar.on('clip', drawClips); dynbar.invoke('clip:get').then(drawClips);
+  { // hızlı not: yazdıkça yerelde saklanır; "Notu Panoya Ekle" metni panoya yazar ve listenin başına koyar
+    const qn = $('#qnote'), qs = $('#qnst'); let qt, qOn = false;
+    try { qn.value = localStorage.getItem('quicknote') || ''; } catch {}
+    qn.addEventListener('input', () => {
+      qs.textContent = 'Kaydediliyor…'; clearTimeout(qt);
+      qt = setTimeout(() => { try { localStorage.setItem('quicknote', qn.value); } catch {} qs.textContent = 'Otomatik kaydedildi'; }, 450);
+    });
+    qn.addEventListener('mousedown', () => { qOn = true; dynbar.send('typing', true); [80, 300, 700].forEach((t) => setTimeout(() => { if (document.activeElement !== qn && island.classList.contains('open')) qn.focus(); }, t)); }); // ada odak almaz; yazmak için geçici odaklanabilir yapılır
+    qn.addEventListener('blur', () => { if (qOn) { qOn = false; dynbar.send('typing', false); } });
+    qn.addEventListener('keydown', (e) => { if (e.key === 'Escape') qn.blur(); });
+    new MutationObserver(() => { if (island.classList.contains('open') || !qOn) return; qOn = false; qn.blur(); dynbar.send('typing', false); }).observe(island, { attributes: true, attributeFilter: ['class'] });
+    $('#qnadd').onclick = () => {
+      const t = qn.value.trim(); if (!t) { qn.focus(); return; }
+      dynbar.send('clip:add', t); const b = $('#qnadd'); b.textContent = 'Panoya eklendi ✓'; setTimeout(() => (b.textContent = '+ Notu Panoya Ekle'), 1200);
+    };
+  }
 
   // --- takvim ---
+  const evTime = (e) => new Date(e.start).toLocaleString('tr-TR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: S.clock24 === false });
   const drawCal = (ev) => {
-    ev0 = ev || []; const e = ev0[0];
-    $('#cal1').textContent = e ? e.title : 'Yaklaşan etkinlik yok';
-    $('#cal2').textContent = e ? new Date(e.start).toLocaleString('tr-TR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: S.clock24 === false }) : (S.icsUrl ? '' : 'Ayarlardan takvim (ICS) adresi ekle');
+    ev0 = ev || []; const e = ev0[0]; $('#calSec').classList.toggle('nodata', !e);
+    if (!e) { $('#calet').textContent = 'Yaklaşan etkinlik yok'; $('#calehint').textContent = S.icsUrl ? 'Takvimde yaklaşan bir kayıt bulunamadı' : 'Ayarlardan takvim (ICS) adresi ekle'; return; }
+    $('#cal1').textContent = e.title; $('#cal2').textContent = evTime(e);
+    const box = $('#calmore'); box.innerHTML = '';
+    ev0.slice(1, 4).forEach((x) => { const d = document.createElement('div'); d.className = 'wrow'; d.innerHTML = '<span></span><b></b>'; d.firstChild.textContent = x.title; d.lastChild.textContent = evTime(x); box.append(d); });
+    if (!box.children.length) box.innerHTML = '<div class="sub">Başka yaklaşan etkinlik yok</div>';
   };
   dynbar.on('cal', drawCal); dynbar.invoke('cal:get').then(drawCal);
 
   // --- pomodoro (süreler ayarlardan) ---
-  const dur = () => ({ focus: (S.pomoFocus || 25) * 60, brk: (S.pomoBreak || 5) * 60, long: (S.pomoLong || 15) * 60 }), NAME = { focus: 'Odak', brk: 'Mola', long: 'Uzun mola' };
-  let ph = 'focus', left = 25 * 60, run = false, rounds = 0, pt, endAt = 0;
+  let focusMin = 0; // süre hapları (15d/25d/45d) ayardaki odak süresini bu oturum için geçersiz kılar
+  const dur = () => ({ focus: (focusMin || S.pomoFocus || 25) * 60, brk: (S.pomoBreak || 5) * 60, long: (S.pomoLong || 15) * 60 }), NAME = { focus: 'Odak', brk: 'Mola', long: 'Uzun mola' };
+  let ph = 'focus', left = 25 * 60, run = false, rounds = 0, pt, endAt = 0, lastHk = '';
   let focusState = false; // odak turu sürerken bildirimler bekletilir (ana süreç "kaçırılanlar" listesini tutar)
   const paint = () => {
     const f = run && ph === 'focus'; if (f !== focusState) { focusState = f; api.setFocus(f); }
     $('#pt').textContent = mmss(left); $('.ptime').textContent = mmss(left);
-    $('#pl').textContent = NAME[ph] + (rounds ? ' · ' + rounds + ' tur' : '') + (f && S.focusDnd !== false ? ' · bildirimler kapalı' + (S.claudeAsk !== false ? ', onaylar açık' : '') : ''); $('#pgo').textContent = run ? 'Duraklat' : 'Başlat';
+    { const tot = dur()[ph] || 1, rf = $('#pring'); if (rf) rf.style.strokeDashoffset = (276.46 * (1 - Math.max(0, Math.min(1, left / tot)))).toFixed(2); // halka kalan süreyi gösterir
+      const card = $('.pcard'); if (card) card.dataset.ph = ph;
+      document.querySelectorAll('#ppre button').forEach((x) => x.classList.toggle('on', +x.dataset.min * 60 === dur().focus)); }
+    $('#pl').textContent = run ? NAME[ph] + (f && S.focusDnd !== false ? ' · sessiz' : '') : (left === (dur()[ph] || 0) ? 'Hazır' : 'Duraklatıldı');
+    $('#ptl').textContent = rounds ? 'Pomodoro · ' + rounds + ' tur' : 'Pomodoro Odak'; $('.pcard').title = f && S.focusDnd !== false ? 'Bildirimler kapalı' + (S.claudeAsk !== false ? ', onaylar açık' : '') : '';
+    $('#pgo').textContent = run ? 'Duraklat' : (left === (dur()[ph] || 0) ? 'Başlat' : 'Devam');
     island.classList.toggle('pomo', run);
+    const hk = run + ph + (left === (dur()[ph] || 0)); if (hk !== lastHk) { lastHk = hk; if (api.refreshHead) api.refreshHead(); } // başlık etiketi + maskot ruh hali
   };
   function tick() {
     left = Math.ceil((endAt - Date.now()) / 1000);
@@ -61,39 +108,56 @@
   }
   $('#pgo').onclick = () => { run = !run; clearInterval(pt); if (run) { endAt = Date.now() + left * 1000; pt = setInterval(tick, 1000); } paint(); };
   $('#prs').onclick = () => { run = false; clearInterval(pt); ph = 'focus'; left = dur().focus; rounds = 0; paint(); };
+  document.querySelectorAll('#ppre button').forEach((x) => (x.onclick = () => { if (run) return; focusMin = +x.dataset.min; ph = 'focus'; left = dur().focus; paint(); }));
   paint();
 
   // --- kronometre ---
   let sw0 = 0, swAcc = 0, swRun = false, swT;
   const swPaint = () => {
     const ms = swAcc + (swRun ? Date.now() - sw0 : 0), s = Math.floor(ms / 1000);
-    $('#swt').textContent = mmss(s) + '.' + Math.floor((ms % 1000) / 100); $('#swgo').textContent = swRun ? 'Durdur' : (swAcc ? 'Devam' : 'Başlat');
+    $('#swt').textContent = mmss(s) + '.' + Math.floor((ms % 1000) / 100); { const bf = $('#swbf'); if (bf) bf.style.width = ((ms % 60000) / 600) + '%'; } $('#swgo').textContent = swRun ? 'Durdur' : (swAcc ? 'Devam' : 'Başlat');
   };
   $('#swgo').onclick = () => {
     if (swRun) { swAcc += Date.now() - sw0; swRun = false; clearInterval(swT); } else { sw0 = Date.now(); swRun = true; swT = setInterval(swPaint, 100); }
-    swPaint();
+    swPaint(); api.refreshHead();
   };
-  $('#swrs').onclick = () => { swRun = false; clearInterval(swT); swAcc = 0; swPaint(); };
+  $('#swrs').onclick = () => { swRun = false; clearInterval(swT); swAcc = 0; swPaint(); api.refreshHead(); };
   swPaint();
+  // üst bant: gerçek duruma bağlı etiket ve "çalışıyor" bilgisi (renderer.js okur)
+  api.working = () => run || swRun;
+  api.stateOf = (id) => id === 'pomoSec' ? (run ? (ph === 'focus' ? 'Odaklanıyor' : 'Molada') : left === (dur()[ph] || 0) ? '' : 'Duraklatıldı') : id === 'swSec' ? (swRun ? 'Çalışıyor' : swAcc ? 'Durdu' : '') : '';
 
   // --- zamanlayıcı kısayolları (ayarlardan: "1,5,10,25") ---
+  let tmrSel = 0; // seçili hazır süre (dk); Başlat ile adada geri sayım başlar
   const drawTmr = () => {
     const box = $('#tmr'); box.innerHTML = '';
-    String(S.timerPresets || '1,5,10,25').split(/[,\s]+/).map(Number).filter((m) => m > 0 && m <= 240).slice(0, 5).forEach((m) => {
-      const b = document.createElement('button'); b.textContent = m + ' dk';
-      b.onclick = () => api.enqueue({ type: 'timer', title: m + ' dk', seconds: m * 60, force: true }); box.append(b);
+    const ms = String(S.timerPresets || '1,5,10,25').split(/[,\s]+/).map(Number).filter((m) => m > 0 && m <= 240).slice(0, 5);
+    if (!ms.includes(tmrSel)) tmrSel = ms[0] || 0;
+    ms.forEach((m) => {
+      const b = document.createElement('button'); b.textContent = m + ' dk'; b.classList.toggle('on', m === tmrSel);
+      b.onclick = () => { tmrSel = m; drawTmr(); }; box.append(b);
     });
+    $('#tmrv').textContent = tmrSel ? mmss(tmrSel * 60) : '–'; $('#tmrgo').style.display = tmrSel ? '' : 'none';
+    if (!ms.length) box.innerHTML = '<div class="sub">Ayarlardan süre ekle</div>';
   };
+  $('#tmrgo').onclick = () => { if (tmrSel) api.enqueue({ type: 'timer', title: tmrSel + ' dk', seconds: tmrSel * 60, force: true }); };
 
-  // --- bildirim geçmişi ---
+  // --- bildirim geçmişi (× ile tek tek sil, "Tümünü Temizle") ---
+  const DOT = ['#4aa8ff', '#3ee0a0', '#ffb347', '#a78bfa', '#ff7ab6'];
+  const dotOf = (str) => { let h = 0; for (const c of String(str || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return DOT[h % DOT.length]; };
   const drawHist = () => {
-    const box = $('#hist'); box.innerHTML = '';
-    if (!api.hist.length) { box.innerHTML = '<div class="sub">Henüz bildirim yok</div>'; return; }
-    api.hist.slice(0, 3).forEach((x) => {
-      const d = document.createElement('div'), t = new Date(x.t); d.className = 'hrow'; d.innerHTML = '<em></em><span></span>';
-      d.firstChild.textContent = pad(t.getHours()) + ':' + pad(t.getMinutes()); d.lastChild.textContent = (x.app ? x.app + ': ' : '') + x.title + (x.text ? ' · ' + x.text : ''); box.append(d);
+    const box = $('#hist'); box.innerHTML = ''; box.classList.remove('isempty'); $('#hcount').textContent = 'Bildirimler (' + api.hist.length + ')'; $('#hclr').style.display = api.hist.length ? '' : 'none';
+    if (!api.hist.length) return setEst(box, '🔔', 'Bildirim yok', 'Dynamic Bar\'da gösterilen bildirimler burada birikir');
+    api.hist.forEach((x) => {
+      const d = document.createElement('div'); d.className = 'hi'; d.style.setProperty('--dc', dotOf(x.app || x.title));
+      d.innerHTML = '<div class="ha"></div><div class="ht"></div><div class="hx"></div><button class="hdel" aria-label="Sil">×</button>';
+      const ha = d.querySelector('.ha'), nm = document.createTextNode(x.app || 'Dynamic Bar'), sp = document.createElement('span'); sp.textContent = ' • ' + rel(x.t); ha.append(nm, sp);
+      d.querySelector('.ht').textContent = x.title; d.querySelector('.hx').textContent = x.text || ''; d.querySelector('.hx').style.display = x.text ? '' : 'none'; d.title = x.title + (x.text ? ' · ' + x.text : '');
+      d.querySelector('.hdel').onclick = (e) => { e.stopPropagation(); const k = api.hist.indexOf(x); if (k >= 0) api.hist.splice(k, 1); drawHist(); };
+      box.append(d);
     });
   };
+  $('#hclr').onclick = () => { api.hist.length = 0; drawHist(); };
   api.onHist = drawHist; drawHist();
 
   // --- hızlı ayarlar ---
@@ -157,14 +221,16 @@
     h.style.color = getComputedStyle(document.documentElement).getPropertyValue('--cheek');
     h.style.left = (mascot.getBoundingClientRect().left - island.getBoundingClientRect().left + 10) + 'px'; h.style.top = '2px';
     island.append(h); setTimeout(() => h.remove(), 1000);
-    setTimeout(() => api.setMood(api.playing() ? 'music' : 'idle'), 1600);
+    setTimeout(() => { if (island.classList.contains('open')) api.refreshHead(); else api.setMood(api.playing() ? 'music' : 'idle'); }, 1600);
   });
 
   // --- hava durumu ---
   let wx = null;
   const drawWx = () => {
-    $('#wt').textContent = wx ? wx.icon + ' ' + wx.temp + '°' + wx.unit : '–';
-    $('#wl').textContent = wx ? `${wx.city} · hissedilen ${wx.feels}° · rüzgar ${wx.wind} km/sa` : (S.city ? 'Yükleniyor…' : 'Ayarlardan şehir gir');
+    $('#wxSec').classList.toggle('nodata', !wx);
+    if (!wx) { $('#wxet').textContent = S.city ? 'Hava verisi henüz yok' : 'Şehir ayarlanmadı'; $('#wxehint').textContent = S.city ? 'Yükleniyor olabilir; internet bağlantını ve ayarlardaki şehir adını kontrol et' : 'Ayarlardan bir şehir gir'; return; }
+    $('#wt').textContent = wx.icon + ' ' + wx.temp + '°' + wx.unit; $('#wl').textContent = wx.city;
+    $('#wfe').textContent = wx.feels + '°' + wx.unit; $('#wwi').textContent = wx.wind + ' km/sa'; $('#wci').textContent = wx.city;
   };
   dynbar.on('weather', (w) => { wx = w; drawWx(); }); dynbar.invoke('weather:get').then((w) => { wx = w; drawWx(); });
 
@@ -175,10 +241,13 @@
   // --- kısayollar ---
   function drawSc() {
     const box = $('#sc'); box.innerHTML = '';
-    String(S.shortcuts || '').split(/\r?\n/).map((l) => l.split('|')).filter((p) => p.length > 1 && p[0].trim() && p[1].trim()).slice(0, 4).forEach((p, i) => {
-      const b = document.createElement('button'); b.textContent = p[0].trim(); b.onclick = () => dynbar.send('launch', i); box.append(b);
+    const list = String(S.shortcuts || '').split(/\r?\n/).map((l) => l.split('|')).filter((p) => p.length > 1 && p[0].trim() && p[1].trim()).slice(0, 8);
+    box.style.setProperty('--cols', Math.max(1, Math.min(4, list.length))); box.style.setProperty('--rh', list.length > 4 ? '54px' : '76px');
+    list.forEach((p, i) => {
+      const name = p[0].trim(), b = document.createElement('button'); b.className = 'tile'; b.title = name; b.innerHTML = '<span class="mono"></span><span class="tn"></span>';
+      b.firstChild.textContent = Array.from(name)[0].toUpperCase(); b.lastChild.textContent = name; b.onclick = () => dynbar.send('launch', i); box.append(b);
     });
-    if (!box.children.length) box.innerHTML = '<div class="sub">Ayarlardan kısayol ekle</div>';
+    if (!list.length) box.innerHTML = est('⚡', 'Kısayol yok', 'Ayarlardan Ad|yol satırı ekle');
   }
 
   // --- hatırlatıcılar (su, göz molası; rahatsız etme/sessiz saatler enqueue içinde denetlenir) ---
@@ -220,8 +289,10 @@
   // --- Claude Code günlük özeti sayfası ---
   const fd = (ms) => { const m = Math.round(ms / 60000); return m >= 60 ? Math.floor(m / 60) + ' sa ' + (m % 60) + ' dk' : m + ' dk'; };
   const drawClaude = (s) => {
-    s = s || {}; $('#cn').textContent = (s.tasks || 0) + ' görev';
-    $('#cl').textContent = s.tasks ? fd(s.ms || 0) + ' çalıştı' + (s.failed ? ' · ' + s.failed + ' takıldı' : '') : 'Henüz görev yok';
+    s = s || {}; const n = s.tasks || 0; $('#claudeSec').classList.toggle('nodata', !n);
+    $('#cn').textContent = n + ' görev';
+    $('#cl').textContent = n ? fd(s.ms || 0) + ' çalıştı' : 'Henüz görev yok';
+    $('#cav').textContent = n ? fd((s.ms || 0) / n) : '–'; $('#cfl').textContent = s.failed || 0;
   };
   dynbar.on('claude', drawClaude); dynbar.invoke('claude:get').then(drawClaude);
 
@@ -234,19 +305,19 @@
 
   // --- yapılacaklar (ekleme: dynbar todo add, API veya tray menüsü; panelde tıklayınca biter/geri açılır) ---
   function drawTodo() {
-    const box = $('#todos'); box.innerHTML = ''; const t = (S.todos || []).slice(0, 3);
-    if (!t.length) { box.innerHTML = '<div class="sub">Liste boş. Eklemek için: dynbar todo add "metin"</div>'; return; }
+    const box = $('#todos'); box.innerHTML = ''; box.classList.remove('isempty'); const t = (S.todos || []).slice(0, 3);
+    if (!t.length) return setEst(box, '📝', 'Liste boş', 'Eklemek için terminalde: dynbar todo add "metin"', true);
     t.forEach((x, i) => {
-      const b = document.createElement('button'); b.textContent = (x.d ? '☑ ' : '☐ ') + x.t; if (x.d) b.style.opacity = 0.5;
+      const b = document.createElement('button'); b.textContent = (x.d ? '☑ ' : '☐ ') + x.t; b.title = x.t; if (x.d) b.style.opacity = 0.5;
       b.onclick = () => dynbar.send('todo', { toggle: i }); box.append(b);
     });
   }
 
   // --- son dosyalar (Windows) ---
   const drawRec = (list) => {
-    const box = $('#recent'); box.innerHTML = '';
-    if (!list.length) { box.innerHTML = '<div class="sub">Son dosya bulunamadı (yalnızca Windows)</div>'; return; }
-    list.slice(0, 3).forEach((f, i) => { const b = document.createElement('button'); b.textContent = f.name; b.onclick = () => dynbar.send('recent:open', i); box.append(b); });
+    const box = $('#recent'); box.innerHTML = ''; box.classList.remove('isempty');
+    if (!list.length) return setEst(box, '🗂️', 'Son dosya bulunamadı', 'Son açtığın dosyalar burada listelenir (yalnızca Windows)', true);
+    list.slice(0, 3).forEach((f, i) => { const b = document.createElement('button'); b.textContent = f.name; b.title = f.name; b.onclick = () => dynbar.send('recent:open', i); box.append(b); });
   };
   const loadRec = () => dynbar.invoke('recent:get').then((l) => drawRec(l || []));
 
@@ -283,6 +354,6 @@
   dynbar.on('rates', (r) => { rt = r; drawRates(); }); dynbar.invoke('rates:get').then((r) => { rt = r; drawRates(); });
 
   // sayfa açılınca veri tazele (renderer.js go() çağırır)
-  api.pageHook = (id) => { if (id === 'recSec') loadRec(); else if (id === 'worldSec') drawWorld(); else if (id === 'cdSec') drawCd(); };
+  api.pageHook = (id) => { if (id === 'pomoSec') drawHist(); else if (id === 'clipSec') drawClips(clipList); else if (id === 'recSec') loadRec(); else if (id === 'worldSec') drawWorld(); else if (id === 'cdSec') drawCd(); };
   setInterval(drawWorld, 10000); setInterval(drawCd, 3600000);
 })();

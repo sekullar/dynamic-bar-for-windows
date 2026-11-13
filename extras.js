@@ -11,13 +11,13 @@ function sys() {
   const c = os.cpus(); let idle = 0, total = 0;
   c.forEach((x, i) => { for (const k in x.times) total += x.times[k] - lastCpu[i].times[k]; idle += x.times.idle - lastCpu[i].times.idle; });
   lastCpu = c;
-  toWin('sys', { cpu: total ? Math.round(100 * (1 - idle / total)) : 0, mem: Math.round(100 * (1 - os.freemem() / os.totalmem())) });
+  toWin('sys', { cpu: total ? Math.round(100 * (1 - idle / total)) : 0, mem: Math.round(100 * (1 - os.freemem() / os.totalmem())), cores: c.length, memUsed: +((os.totalmem() - os.freemem()) / 1073741824).toFixed(1), memTotal: +(os.totalmem() / 1073741824).toFixed(1) });
 }
 
 function clip() { // yalnızca bellekte tutulur, diske yazılmaz
   if (!S().pageClipboard) return;
   const t = clipboard.readText();
-  if (t && t !== lastClip) { lastClip = t; clips = [t, ...clips.filter((x) => x !== t)].slice(0, 8); toWin('clip', clips); }
+  if (t && t !== lastClip) { lastClip = t; clips = [{ t, at: Date.now() }, ...clips.filter((x) => x.t !== t)].slice(0, 8); toWin('clip', clips); }
 }
 
 const icsDate = (v) => {
@@ -167,14 +167,18 @@ function cursor() { // imleç konumu: gözler için ve panelin otomatik kapanmas
   const p = screen.getCursorScreenPoint(), b = w.getBounds(), x = p.x - b.x, y = p.y - b.y;
   if (x !== lx || y !== ly) { lx = x; ly = y; w.webContents.send('cursor', { x, y }); }
 }
-const shortcuts = () => String(S().shortcuts || '').split(/\r?\n/).map((l) => l.split('|')).filter((p) => p.length > 1 && p[0].trim() && p[1].trim()).map((p) => ({ name: p[0].trim(), target: p.slice(1).join('|').trim() })).slice(0, 4);
+const shortcuts = () => String(S().shortcuts || '').split(/\r?\n/).map((l) => l.split('|')).filter((p) => p.length > 1 && p[0].trim() && p[1].trim()).map((p) => ({ name: p[0].trim(), target: p.slice(1).join('|').trim() })).slice(0, 8);
 
 function init(c) {
   ctx = c;
   ipcMain.handle('clip:get', () => clips);
   ipcMain.handle('cal:get', () => events);
   ipcMain.handle('displays', () => screen.getAllDisplays().map((d, i) => [i, 'Ekran ' + (i + 1) + ' (' + d.bounds.width + '×' + d.bounds.height + ')']));
-  ipcMain.on('clip:copy', (_e, i) => { if (clips[i]) { lastClip = clips[i]; clipboard.writeText(clips[i]); } });
+  ipcMain.on('clip:copy', (_e, i) => { if (clips[i]) { lastClip = clips[i].t; clipboard.writeText(clips[i].t); } });
+  ipcMain.on('clip:add', (_e, t) => { // hızlı not: metni panoya yazar ve listeye ekler
+    t = String(t || '').slice(0, 5000); if (!t.trim()) return;
+    lastClip = t; clipboard.writeText(t); clips = [{ t, at: Date.now(), note: true }, ...clips.filter((x) => x.t !== t)].slice(0, 8); toWin('clip', clips);
+  });
   ipcMain.handle('weather:get', () => weather);
   ipcMain.handle('rates:get', () => rates);
   ipcMain.handle('recent:get', () => (recentList = recent()));

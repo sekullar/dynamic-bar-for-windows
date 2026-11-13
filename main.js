@@ -20,7 +20,7 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
 const PORT = 47800;
 const preload = path.join(__dirname, 'preload.js');
-const WIN_W = 620, WIN_H = 250; // şeffaf pencere; ölçek 1.3'e kadar sığar, boş alan tıklamayı arkaya geçirir
+const WIN_W = 860, WIN_H = 380; // şeffaf pencere (açık panel 600x270); ölçek 1.3'e kadar sığar, boş alan tıklamayı arkaya geçirir
 
 const DEFAULTS = {
   // maskot

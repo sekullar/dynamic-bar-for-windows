@@ -33,7 +33,7 @@
     return a === b ? false : a < b ? c >= a && c < b : c >= a || c < b;
   }
   const BG = { black: '#000000', graphite: '#17161b', midnight: '#0b1124', plum: '#1c1020', forest: '#0d1a14' };
-  const SHADOW = { none: ['none', 'none'], soft: ['0 1px 5px rgba(0,0,0,.25)', '0 3px 12px rgba(0,0,0,.3)'], normal: ['0 4px 14px rgba(0,0,0,.35)', '0 8px 24px rgba(0,0,0,.45)'] };
+  const SHADOW = { none: ['none', 'none'], soft: ['none', 'none'], normal: ['none', 'none'] }; // ada dışına taşan gölge yok: derinlik ton farkıyla verilir (ayar geriye uyumluluk için duruyor)
 
   function applySettings(s) {
     cfg = s; const r = document.documentElement.style;
@@ -46,7 +46,9 @@
     r.setProperty('--ui', s.uiScale || 1); r.setProperty('--top', (s.offsetY ?? 10) + 'px');
     document.body.dataset.mode = /^dock/.test(s.mode) ? 'dock' : 'float'; document.body.dataset.anim = s.anim || 'spring';
     swipe = s.swipe || 160; toasts = s.mediaToasts !== false; setTimeout(syncShape, 0);
-    document.querySelectorAll('[data-feat]').forEach((sec) => (sec.style.display = s[sec.dataset.feat] === false ? 'none' : '')); layout();
+    document.querySelectorAll('[data-feat]').forEach((sec) => (sec.style.display = s[sec.dataset.feat] === false ? 'none' : ''));
+    document.querySelectorAll('[data-any]').forEach((sec) => (sec.style.display = sec.dataset.any.split(' ').every((k) => s[k] === false) ? 'none' : '')); // birleşik sayfa: içindeki tüm özellikler kapalıysa gizle
+    layout();
     document.querySelectorAll('.sw').forEach((b) => b.classList.toggle('on', !s.accent && b.dataset.c === s.color));
     tick();
   }
@@ -192,6 +194,7 @@
       if (a.mood === 'claude') { clearTimeout(morphT); morphT = setTimeout(() => { if (cur === a) setMood('happy'); }, 3400); } // Claude Code maskotu bir süre kalır, sonra eski haline döner
       if (mini) { island.classList.remove('expanded', 'open', 'ask'); content.classList.remove('swap'); schedule(a); return; }
       island.classList.add('expanded'); content.classList.remove('swap');
+      if (/^(alert|call|party)$/.test(a.mood || '') || a.priority === 'high') { island.classList.remove('pulse'); void island.offsetWidth; island.classList.add('pulse'); setTimeout(() => island.classList.remove('pulse'), 950); } // dikkat halkası
       if (a.type !== 'timer' && (!a.key || a.askId) && a.mood !== 'music') ping(a.mood);
       a.type === 'timer' ? runTimer(a) : schedule(a);
     }, wasExpanded ? 220 : 0);
@@ -208,12 +211,12 @@
   }
 
   // Tıklama bölgesi: ana süreç imleç adanın üstündeyken pencereyi tıklanabilir yapar (yalnızca ada bölgesi)
-  const SZ = { c: [112, 36], e: [400, 78], a: [400, 112], o: [420, 136] };
+  const SZ = { c: [112, 36], e: [400, 78], a: [400, 112], o: [620, 270] };
   let shapeT, shapeArea = 0;
   function syncShape() {
     const ui = cfg.uiScale || 1, kind = isOpen() ? 'o' : island.classList.contains('ask') ? 'a' : island.classList.contains('expanded') ? 'e' : 'c', w = SZ[kind][0], h = kind === 'a' ? askH : SZ[kind][1];
-    const top = document.body.dataset.mode === 'dock' ? 0 : (cfg.offsetY ?? 10), W = window.innerWidth, pad = 4; // pay dar tutulur: ada dışında kalan görünmez bölge Chrome sekmeleri gibi altındaki uygulamaların tıklamasını yutuyordu
-    const rect = { x: Math.max(0, Math.round((W - w * ui) / 2) - pad), y: 0, width: Math.min(W, Math.round(w * ui) + pad * 2), height: Math.round((top + h) * ui) + 3 };
+    const top = document.body.dataset.mode === 'dock' ? 0 : (cfg.offsetY ?? 10), W = window.innerWidth, pad = kind === 'o' ? 18 : 4; // açık panelde yay taşması (genişlik %8 aşar) kırpılmasın diye pay geniş // pay dar tutulur: ada dışında kalan görünmez bölge Chrome sekmeleri gibi altındaki uygulamaların tıklamasını yutuyordu
+    const rect = { x: Math.max(0, Math.round((W - w * ui) / 2) - pad), y: 0, width: Math.min(W, Math.round(w * ui) + pad * 2), height: Math.round((top + h) * ui) + (kind === 'o' ? 10 : 3) };
     const area = rect.width * rect.height, apply = () => { shapeArea = area; dynbar.send('shape', rect); };
     clearTimeout(shapeT);
     if (area >= shapeArea) apply(); else shapeT = setTimeout(apply, 900); // küçülürken animasyon bitsin
@@ -248,6 +251,30 @@
     $('.pdots').innerHTML = pages.map(() => '<i></i>').join(''); dots = [...document.querySelectorAll('.pdots i')];
     go(Math.min(page, pages.length - 1), false, true);
   }
+  // Üst bant: sayfa başlığı + gerçek duruma bağlı küçük etiket; maskot ruh hali yalnız panel açıkken ve bildirim yokken sayfaya/duruma göre ayarlanır
+  const night = () => { const h = new Date().getHours(); return h >= 23 || h < 7; };
+  function stateOf(sec) {
+    const ex = window.barApi && window.barApi.stateOf && window.barApi.stateOf(sec.id); if (ex) return ex;
+    if (sec.id === 'media') return playing ? 'Çalıyor' : media.title ? 'Duraklatıldı' : 'Hazır';
+    if (sec.id === 'clockSec' && night()) return 'Gece';
+    return 'Hazır';
+  }
+  function updateHead() {
+    const sec = pages[page]; if (!sec) return;
+    $('#ptitle').textContent = sec.dataset.title || ''; $('#pstate').textContent = stateOf(sec);
+  }
+  function panelMood(first) {
+    const sec = pages[page], w = !!(window.barApi && window.barApi.working && window.barApi.working());
+    if (sec && sec.id === 'media' && playing) return 'music';
+    if (w) return 'working';
+    if (playing) return 'music';
+    if (sec && sec.id === 'clockSec' && night()) return 'sleep';
+    return first ? 'happy' : 'idle'; // açılışta zaten happy; sayfa gezerken sakin
+  }
+  function syncPanelMood(first) {
+    if (!isOpen() || (busy && !isAmbient(cur))) return; // normal bildirim varken ya da panel kapalıyken dokunma (canlı Claude durumunun üstünde panel açıksa uygula; kapanışta closePanel eski ruh haline döner)
+    const m = panelMood(first); if (mascot.dataset.mood !== m) setMood(m);
+  }
   function go(i, snap, quietHook) { // snap: animasyonsuz yerleş; quietHook: sayfa kancasını (veri yenileme) çağırma
     page = Math.max(0, Math.min(pages.length - 1, i));
     if (snap) track.style.transition = 'none';
@@ -256,6 +283,7 @@
     dots.forEach((d, k) => d.classList.toggle('on', k === page));
     pages.forEach((s, k) => s.classList.toggle('active', k === page));
     const sec = pages[page];
+    updateHead(); if (!quietHook) syncPanelMood(true);
     if (!quietHook && sec && sec.id && window.barApi && window.barApi.pageHook) window.barApi.pageHook(sec.id);
   }
   // güvenlik: panel hiçbir zaman kendiliğinden kaydırılmasın, ada boyutu bitince sayfa hizası yeniden oturtulsun
@@ -268,6 +296,7 @@
     const r = island.getBoundingClientRect(), m = 14;
     return lastCur.x >= r.left - m && lastCur.x <= r.right + m && lastCur.y >= r.top - m && lastCur.y <= r.bottom + m;
   };
+  let lastClosed = 0;
   function openPanel() {
     clearTimeout(sleepT); dynbar.raise(true); setMood('happy'); island.classList.add('expanded', 'open');
     armed = insideCur(); // kısayolla açıldıysa ve imleç dışarıdaysa, imleç bir kez içeri girene kadar kendiliğinden kapanmaz
@@ -276,7 +305,7 @@
   function showMini() { miniClaude = true; island.classList.remove('expanded', 'open', 'ask'); dynbar.raise(false); setMood(ambientMood(cur)); }
   function restoreFull() { miniClaude = false; if (cur) paintNotif(cur); island.classList.remove('open'); island.classList.add('expanded'); dynbar.raise(true); setMood(ambientMood(cur)); }
   function closePanel() {
-    clearTimeout(closeT); clearTimeout(leaveT); leaveT = 0;
+    clearTimeout(closeT); clearTimeout(leaveT); leaveT = 0; lastClosed = Date.now();
     if (!busy) return collapse();
     if (!isOpen()) return;
     island.classList.remove('open');
@@ -284,7 +313,7 @@
     if (cur && isAmbient(cur) && miniClaude) showMini(); else if (cur) setMood(cur.mood || 'happy');
   }
   function activate() { // tıklama, kısayol veya üzerine gelme: bildirim varsa geç (url varsa aç), yoksa paneli aç
-    if (isOpen() || typing) return;
+    if (isOpen() || typing || Date.now() - lastClosed < 350) return; // kapatma tıklamasının artçısı paneli tekrar açmasın
     if (busy && !isAmbient(cur)) { if (cur && cur.url) dynbar.send('open-url', cur.url); next(); } else openPanel(); // canlı durum varken tıklayınca panel açılır
   }
 
@@ -350,10 +379,16 @@
   });
   $('#minbtn').addEventListener('mousedown', (e) => { e.stopPropagation(); showMini(); });
   $('#close').addEventListener('mousedown', (e) => { e.stopPropagation(); closePanel(); });
+  // aynı tıklamanın click olayı adaya ulaşıp paneli yeniden açmasın (Claude Code kartı varken kapat düğmesi çalışmıyordu)
+  for (const id of ['#minbtn', '#close']) $(id).addEventListener('click', (e) => e.stopPropagation());
+  $('.pdots').addEventListener('click', (e) => e.stopPropagation());
   $('.pdots').addEventListener('mousedown', (e) => { e.stopPropagation(); const k = [...$('.pdots').children].indexOf(e.target); if (k >= 0) go(k); });
   // iki parmakla kaydırma (touchpad) veya fare tekerleği ile sayfa değiştir
   island.addEventListener('wheel', (e) => {
-    if (!isOpen()) return; e.preventDefault();
+    if (!isOpen()) return;
+    const sc = e.target.closest && e.target.closest('.scroll'); // kaydırılabilir liste (pano, bildirimler, not): tekerlek önce listeyi kaydırır
+    if (sc && Math.abs(e.deltaY) >= Math.abs(e.deltaX) && sc.scrollHeight > sc.clientHeight + 1 && (e.deltaY < 0 ? sc.scrollTop > 0 : sc.scrollTop + sc.clientHeight < sc.scrollHeight - 1)) { wheelSum = 0; lastWheel = Date.now(); return; }
+    e.preventDefault();
     const now = Date.now(), gap = now - lastWheel, d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
     lastWheel = now;
     if (gap > 120) { wheelSum = 0; locked = false; lastD = 0; }
@@ -374,8 +409,11 @@
     $('#art').classList.toggle('noart', !media.art);
     $('#pp').innerHTML = playing ? I.pause : I.play;
     $('#mprog b').style.width = media.dur > 0 ? Math.min(100, (media.pos / media.dur) * 100) + '%' : '0%';
-    $('#mtime').textContent = media.title ? fmt(Math.floor(media.pos || 0)) : '';
+    $('#mtime').textContent = media.title ? fmt(Math.floor(media.pos || 0)) : ''; $('#mdur').textContent = media.title && media.dur > 0 ? fmt(Math.floor(media.dur)) : '';
+    $('#mst').style.display = media.title ? '' : 'none'; $('#mst').classList.toggle('pa', !playing); $('#mst em').textContent = playing ? 'Çalıyor' : 'Duraklatıldı';
     if (playing !== was && !busy && !isOpen()) collapse();
+    $('#media .card').classList.toggle('nomedia', !media.title); $('#mhint').textContent = media.error && !media.title ? '⚠ ' + String(media.error).slice(0, 70) : 'Bir uygulamada müzik ya da video oynatınca burada görünür';
+    if (isOpen()) { updateHead(); if (playing !== was) syncPanelMood(false); }
     if (primed && media.key !== lastKey && toasts && playing && media.title && !isOpen() && !cfg.dnd && !isQuiet() && !focusOn) {
       push({ title: media.title, text: media.artist, mood: 'music', ttl: 3 });
     }
@@ -387,16 +425,25 @@
     const b = document.createElement('button'); b.className = 'sw'; b.title = p[0]; b.dataset.c = k; b.style.background = p[1];
     b.addEventListener('click', () => dynbar.setSettings({ color: k, accent: '' })); $('#sws').append(b);
   });
+  const SFX = { 0: 'ı', 10: 'u', 20: 'si', 30: 'u', 40: 'ı', 50: 'si', 60: 'ı', 70: 'i', 80: 'i', 90: 'ı', 100: 'ü', 1: 'i', 2: 'si', 3: 'ü', 4: 'ü', 5: 'i', 6: 'sı', 7: 'si', 8: 'i', 9: 'u' }; // %NN'i / %NN'ü: Türkçe iyelik eki
+  function dayInfo(n) { // yerel saatten: günün yüzdesi, ISO hafta numarası, yılın kaçıncı günü
+    const sod = new Date(n.getFullYear(), n.getMonth(), n.getDate()), frac = Math.min(1, (n - sod) / 864e5), pct = Math.floor(frac * 100);
+    $('#dayb').style.width = (frac * 100).toFixed(1) + '%'; $('#daypct').textContent = `Günün %${pct}'${SFX[pct % 10 === 0 ? pct : pct % 10]} tamamlandı`;
+    const u = new Date(Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())), dn = u.getUTCDay() || 7, doy = Math.round((u - Date.UTC(n.getFullYear(), 0, 1)) / 864e5) + 1;
+    u.setUTCDate(u.getUTCDate() + 4 - dn); const wk = Math.ceil(((u - Date.UTC(u.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+    $('#weekn').textContent = 'Hafta ' + wk; $('#doyn').textContent = 'Yılın ' + doy + '. günü';
+  }
   function tick() {
     const n = new Date(), h24 = cfg.clock24 !== false; let h = n.getHours();
     const suf = h24 ? '' : (h >= 12 ? ' PM' : ' AM'); if (!h24) h = h % 12 || 12;
-    $('#clock').textContent = pad(h) + ':' + pad(n.getMinutes()) + (cfg.clockSeconds ? ':' + pad(n.getSeconds()) : '') + suf;
+    $('#ckh').textContent = pad(h) + ':' + pad(n.getMinutes()); $('#cks').textContent = (cfg.clockSeconds ? ':' + pad(n.getSeconds()) : '') + suf;
+    dayInfo(n);
     $('#date').textContent = n.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' }) + (window.barApi && window.barApi.waterLine ? window.barApi.waterLine() : '');
   }
   tick(); setInterval(tick, 1000);
   window.barApi = {
     enqueue: (a) => { if ((cfg.dnd || isQuiet() || focusOn) && !a.force) return; push(a); },
-    setMood, layout, playing: () => playing, idle: () => !busy && !isOpen() && !playing, hist, onHist: null, pageHook: null,
+    setMood, layout, refreshHead: () => { updateHead(); syncPanelMood(false); }, playing: () => playing, idle: () => !busy && !isOpen() && !playing, hist, onHist: null, pageHook: null,
     setFocus: (v) => { focusOn = !!v && cfg.focusDnd !== false; dynbar.send('focus', !!v); }
   };
   layout(); collapse(); syncShape(); enter();
