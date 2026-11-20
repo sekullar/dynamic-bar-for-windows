@@ -288,8 +288,9 @@
   #content > div { opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .5s var(--spring-soft); }
   #island.expanded:not(.open) #content > div { opacity: 1; transform: none; }
   #island.expanded #title { transition-delay: .12s; } #island.expanded #text { transition-delay: .2s; } #island.expanded #bar { transition-delay: .28s; }
-  #track { transition: transform .6s var(--spring-soft); }
-  #track section { opacity: 0; transform: scale(.94); transition: opacity .35s, transform .55s var(--spring-soft); }
+  /* sayfa kaydırma: klasik, taşmayan (overshoot yok) yavaşlayarak duran eğri; yay eğrisi hedefin ötesine gidip geri geliyordu */
+  #track { transition: transform .45s var(--out); }
+  #track section { opacity: 0; transform: scale(.94); transition: opacity .3s, transform .4s var(--out); }
   #track section.active { opacity: 1; transform: none; }
   .eq i:nth-child(1) { animation-duration: .9s; } .eq i:nth-child(2) { animation-duration: 1.15s; } .eq i:nth-child(3) { animation-duration: .8s; } .eq i:nth-child(4) { animation-duration: 1.05s; }
   #sc button { padding: 6px 10px; }
