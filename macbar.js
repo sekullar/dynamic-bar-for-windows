@@ -87,18 +87,24 @@ const dockSize = () => Math.round(clampN(ctx.settings().macDockSize || 40, 28, 7
 const dockReserve = () => dockSize() + 10 + 28; // simge kutusu + dolgu + alt boşluk (macdock.html ile aynı)
 
 // ---------- Windows görev çubuğu ----------
+const GUARD_DELAY = 10000; let guardT = null;
 function hideTaskbar() {
   if (!taskbarOn) {
     try { origAutohide = !!JSON.parse(fs.readFileSync(stateFile(), 'utf8')).autohide; } // önceki oturum geri yüklemeden kapandıysa asıl değer dosyada kalır
     catch { origAutohide = wl.getAutohide(); try { fs.writeFileSync(stateFile(), JSON.stringify({ autohide: origAutohide })); } catch {} }
-    try { // bekçi: ana süreç (çökse bile) kapanınca görev çubuğunu geri getirir
-      // libuv doğrudan çocuk süreçleri ana süreçle birlikte öldürür (job nesnesi); torun süreçler kurtulur. Bu yüzden bekçi Start-Process ile torun olarak başlatılır.
-      const q = (x) => "'" + String(x).replace(/'/g, "''") + "'";
-      const script = ctx.unpacked(path.join(__dirname, 'scripts', 'taskbar-guard.ps1'));
-      const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', '"' + script + '"', String(process.pid), origAutohide ? '1' : '0', '"' + stateFile() + '"'];
-      const launcher = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList ' + args.map(q).join(',')], { windowsHide: true, stdio: 'ignore' });
-      launcher.on('error', () => {});
-    } catch (e) { ctx.log('taskbar-guard', e.message); }
+    // bekçi: ana süreç (çökse bile) kapanınca görev çubuğunu geri getirir. İki PowerShell başlatır ve içinde C# derler (Add-Type, CPU yoğun);
+    // açılış yükünün üstüne binmesin diye açılıştan GUARD_DELAY ms sonra başlatılır.
+    guardT = setTimeout(() => {
+      guardT = null; if (!taskbarOn) return;
+      try {
+        // libuv doğrudan çocuk süreçleri ana süreçle birlikte öldürür (job nesnesi); torun süreçler kurtulur. Bu yüzden bekçi Start-Process ile torun olarak başlatılır.
+        const q = (x) => "'" + String(x).replace(/'/g, "''") + "'";
+        const script = ctx.unpacked(path.join(__dirname, 'scripts', 'taskbar-guard.ps1'));
+        const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', '"' + script + '"', String(process.pid), origAutohide ? '1' : '0', '"' + stateFile() + '"'];
+        const launcher = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList ' + args.map(q).join(',')], { windowsHide: true, stdio: 'ignore' });
+        launcher.on('error', () => {});
+      } catch (e) { ctx.log('taskbar-guard', e.message); }
+    }, GUARD_DELAY);
     taskbarOn = true;
   }
   if (!wl.getAutohide()) wl.setAutohide(true);
@@ -107,6 +113,7 @@ function hideTaskbar() {
 function restoreTaskbar() {
   if (!taskbarOn) return;
   taskbarOn = false;
+  if (guardT) { clearTimeout(guardT); guardT = null; }
   try { wl.setAutohide(origAutohide); wl.showTaskbar(true); } catch (e) { ctx.log('görev çubuğu geri yüklenemedi', e.message); }
   try { fs.unlinkSync(stateFile()); } catch {} // dosya silinince bekçi bir şey yapmadan çıkar
 }
