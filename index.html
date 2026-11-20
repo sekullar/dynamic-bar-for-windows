@@ -272,9 +272,10 @@
   #eyes { transition:transform .15s ease-out; }
   /* animasyon: gerçek yay (spring) eğrileri */
   :root { --spring: linear(0.0, 0.0122, 0.0453, 0.095, 0.1569, 0.2275, 0.3034, 0.3819, 0.4608, 0.538, 0.6122, 0.682, 0.7466, 0.8055, 0.8583, 0.9048, 0.9452, 0.9795, 1.0081, 1.0313, 1.0496, 1.0634, 1.0732, 1.0795, 1.0828, 1.0835, 1.0821, 1.0791, 1.0748, 1.0694, 1.0634, 1.0571, 1.0505, 1.0439, 1.0375, 1.0313, 1.0256, 1.0203, 1.0154, 1.0111, 1); --spring-soft: linear(0.0, 0.0077, 0.0287, 0.0604, 0.1004, 0.1464, 0.1968, 0.2501, 0.3048, 0.36, 0.4146, 0.4681, 0.5198, 0.5693, 0.6162, 0.6603, 0.7015, 0.7396, 0.7747, 0.8068, 0.836, 0.8623, 0.8859, 0.9069, 0.9255, 0.9418, 0.956, 0.9683, 0.9789, 0.9878, 0.9953, 1.0016, 1.0066, 1.0107, 1.0138, 1.0162, 1.0179, 1.019, 1.0197, 1.0199, 1); }
-  #island { transition: width .8s var(--spring), height .75s var(--spring-soft), border-radius .6s var(--spring-soft), padding .6s var(--spring-soft), top .5s var(--spring-soft), transform .4s var(--spring-soft), box-shadow .5s ease, opacity .12s ease; }
+  /* ada açılışı: klasik, taşmayan eğri (yay eğrileri genişlikte ~%8, yükseklikte ~%2 taşıp geri geliyordu) */
+  #island { transition: width .55s var(--out), height .5s var(--out), border-radius .5s var(--out), padding .5s var(--out), top .4s var(--out), transform .35s var(--out), box-shadow .5s ease, opacity .12s ease; }
   /* kapanış açılıştan kısa ve taşmasız: ada hızla toparlanır */
-  #island:not(.expanded):not(.open) { transition: width .42s var(--out), height .42s var(--out), border-radius .42s var(--out), padding .42s var(--out), top .4s var(--spring-soft), transform .4s var(--spring-soft), box-shadow .4s ease, opacity .12s ease; }
+  #island:not(.expanded):not(.open) { transition: width .42s var(--out), height .42s var(--out), border-radius .42s var(--out), padding .42s var(--out), top .4s var(--out), transform .35s var(--out), box-shadow .4s ease, opacity .12s ease; }
   #island.hush { opacity: 0; pointer-events: none; }
   /* yapışık mod: tüm ölçekleme üst kenardan olur, ada ekranın tepesinden asla ayrılmaz (0 px boşluk) */
   body[data-mode=dock] #island { transform-origin: 50% 0; top: 0 !important; }

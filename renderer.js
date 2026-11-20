@@ -236,7 +236,7 @@
     enterAnim = isDock()
       ? island.animate([NOTCH, { ...NOTCH, opacity: 1, offset: 0.18 }, FULL], { duration: 480, easing: 'cubic-bezier(.2,.85,.25,1)' })
       : island.animate([{ transform: 'translateX(-50%) translateY(-70px) scale(.7)', opacity: 0 }, { transform: 'translateX(-50%) translateY(0) scale(1)', opacity: 1 }],
-        { duration: 800, easing: getComputedStyle(document.documentElement).getPropertyValue('--spring').trim() || 'ease-out' });
+        { duration: 550, easing: 'cubic-bezier(.32,.72,0,1)' }); // klasik, taşmayan giriş (yay eğrisi hedefi aşıp geri geliyordu)
   }
   function leave() { // yalnızca yapışık modda: ana süreç pencereyi bu animasyon bittikten sonra gizler
     if (!motionOk() || !isDock()) return;
