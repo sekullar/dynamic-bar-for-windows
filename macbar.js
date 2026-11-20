@@ -204,13 +204,14 @@ function wallpaperLum() {
     return wallL;
   } catch { return null; }
 }
-// Barın tam arkasındaki ekran şeridinin parlaklığı (duvar kağıdı + alttaki pencereler). Yazının gezdiği orta satırlar atlanır, yalnızca
-// üst ve alt kenardaki boş satırlar örneklenir; böylece yazının kendisi ölçümü saptırmaz.
+// Barın tam arkasındaki ekran şeridinin parlaklığı (duvar kağıdı + alttaki pencereler). Yazının gezdiği orta satırlar atlanır; yalnızca
+// alt kenardaki boş satırlar örneklenir. Üstteki hafif gölge (MenuBar.cs) aşağıya doğru sönüyor, alt satırlarda yok sayılır; böylece ne yazı
+// ne de gölge ölçümü saptırır.
 function barLum() {
   try {
     const d = display(), sf = d.scaleFactor || 1, o = screen.dipToScreenPoint({ x: d.bounds.x, y: d.bounds.y });
-    const w = Math.round(d.bounds.width * sf), h = Math.round(MENU_H * sf), k = Math.max(2, Math.round(3 * sf)), rows = [];
-    for (let i = 0; i < k; i++) rows.push(i, h - 1 - i);
+    const w = Math.round(d.bounds.width * sf), h = Math.round(MENU_H * sf), k = Math.max(3, Math.round(4 * sf)), rows = [];
+    for (let i = 0; i < k; i++) rows.push(h - 1 - i);
     return wl.sampleLum(Math.round(o.x), Math.round(o.y), w, h, rows);
   } catch { return null; }
 }

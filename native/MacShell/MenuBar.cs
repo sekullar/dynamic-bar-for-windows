@@ -94,6 +94,15 @@ class MenuWindow : Surface
         Dc.Transform = Tb;
         var fg = Light ? new Color4(1, 1, 1, 1) : new Color4(0, 0, 0, 1);
         var shadowC = Light ? new Color4(0, 0, 0, .35f) : new Color4(1, 1, 1, .35f);
+        // Üstten aşağı sönen hafif gölge: yazılar parlak ya da karmaşık arka planda da net okunsun. Yazı rengine ters renkte (beyaz yazıda koyu, siyah yazıda açık).
+        // Gradyan API'si yerine birkaç ince bant çizilir. En üstte ~%34, altta 0.
+        const int bands = 12; float bh = H / bands;
+        for (int k = 0; k < bands; k++)
+        {
+            float t = (k + .5f) / bands, a = .34f * MathF.Pow(1 - t, 1.6f);
+            br.Color = Light ? new Color4(0, 0, 0, a) : new Color4(1, 1, 1, a * .8f);
+            Dc.FillRectangle(new RawRectF(0, k * bh, W, (k + 1) * bh + .5f), br);
+        }
         for (int i = 0; i < btns.Count; i++)
         {
             var b = btns[i]; bool isOpen = openId == b.Id, h = i == hot;

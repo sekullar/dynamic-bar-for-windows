@@ -2,10 +2,10 @@
 <html lang="tr"><head><meta charset="utf-8"><title>Menü çubuğu</title>
 <link rel="stylesheet" href="assets/mac.css">
 <style>
-  :root { --fg:#fff; --sh:rgba(0,0,0,.35); }
-  :root.dark { --fg:#000; --sh:rgba(255,255,255,.35); }
+  :root { --fg:#fff; --sh:rgba(0,0,0,.35); --scrim:rgba(0,0,0,.34); }
+  :root.dark { --fg:#000; --sh:rgba(255,255,255,.35); --scrim:rgba(255,255,255,.27); }
   html, body { margin:0; height:25px; overflow:hidden; background:transparent; user-select:none; cursor:default; font-family:var(--font); font-size:13px; font-weight:600; letter-spacing:-.006em; color:var(--fg); }
-  #bar { display:grid; grid-template-columns:1fr 188px 1fr; align-items:center; height:25px; padding:0 6px; box-sizing:border-box; text-shadow:0 0 6px var(--sh); }
+  #bar { display:grid; grid-template-columns:1fr 188px 1fr; align-items:center; height:25px; padding:0 6px; box-sizing:border-box; text-shadow:0 0 6px var(--sh); background:linear-gradient(to bottom, var(--scrim), transparent); }
   .grp { display:flex; align-items:center; min-width:0; } .grp.r { justify-content:flex-end; }
   .b { display:flex; align-items:center; justify-content:center; gap:5px; height:21px; padding:0 8px; border-radius:7px; color:inherit; font:inherit; background:none; border:0; cursor:default; white-space:nowrap; text-shadow:inherit;
     transition:background .18s, transform .35s cubic-bezier(.34,1.7,.5,1); }
