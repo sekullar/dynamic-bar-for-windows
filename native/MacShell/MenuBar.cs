@@ -88,7 +88,7 @@ class MenuWindow : Surface
     public override void Draw()
     {
         br ??= Dc.CreateSolidColorBrush(new Color4(1, 1, 1, 1));
-        fmt ??= Gfx.Text(13, FontWeight.Medium); fmtBold ??= Gfx.Text(13, FontWeight.SemiBold);
+        fmt ??= Gfx.Text(13, FontWeight.SemiBold); fmtBold ??= Gfx.Text(13, FontWeight.Bold);
         round ??= Gfx.D2D.CreateStrokeStyle(new StrokeStyleProperties { StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round });
         Info(); LayoutBtns();
         Dc.Transform = Tb;
@@ -119,11 +119,11 @@ class MenuWindow : Surface
     {
         float x = cx - 3.5f, y = cy - 7.5f; br.Color = fg;
         Vector2[] p = { new(x + 0, y + 4.5f), new(x + 7, y + 11), new(x + 3.5f, y + 14.5f), new(x + 3.5f, y + 0.5f), new(x + 7, y + 4), new(x + 0, y + 10.5f) };
-        for (int i = 0; i < p.Length - 1; i++) Dc.DrawLine(p[i], p[i + 1], br, 1.4f, round);
+        for (int i = 0; i < p.Length - 1; i++) Dc.DrawLine(p[i], p[i + 1], br, 1.7f, round);
     }
     void Tray(float cx, float cy, Color4 fg)
     {
-        br.Color = fg; Dc.DrawLine(new Vector2(cx - 4, cy + 2), new Vector2(cx, cy - 2), br, 1.6f, round); Dc.DrawLine(new Vector2(cx, cy - 2), new Vector2(cx + 4, cy + 2), br, 1.6f, round);
+        br.Color = fg; Dc.DrawLine(new Vector2(cx - 4, cy + 2), new Vector2(cx, cy - 2), br, 1.9f, round); Dc.DrawLine(new Vector2(cx, cy - 2), new Vector2(cx + 4, cy + 2), br, 1.9f, round);
     }
     internal static void TrayFlyout() // Windows'un gizli simgeler (sistem tepsisi) paneli: Win+B, ardından Enter
     {
@@ -140,16 +140,16 @@ class MenuWindow : Surface
         Dc.Transform = Matrix3x2.CreateTranslation(cx - 9, cy - 7) * Tb;
         using var a = Arc(1.6f, 5.2f, 16.4f, 5.2f, 10.6f); using var b = Arc(4.2f, 7.9f, 13.8f, 7.9f, 7); using var c = Arc(6.7f, 10.4f, 11.3f, 10.4f, 3.5f);
         br.Color = new Color4(sh.R, sh.G, sh.B, sh.A * .8f * op); Dc.Transform = Matrix3x2.CreateTranslation(cx - 9, cy - 7 + .6f) * Tb;
-        Dc.DrawGeometry(a, br, 1.8f, round); Dc.DrawGeometry(b, br, 1.8f, round); Dc.DrawGeometry(c, br, 1.8f, round);
+        Dc.DrawGeometry(a, br, 2.1f, round); Dc.DrawGeometry(b, br, 2.1f, round); Dc.DrawGeometry(c, br, 2.1f, round);
         Dc.Transform = Matrix3x2.CreateTranslation(cx - 9, cy - 7) * Tb; br.Color = new Color4(fg.R, fg.G, fg.B, op);
-        Dc.DrawGeometry(a, br, 1.8f, round); Dc.DrawGeometry(b, br, 1.8f, round); Dc.DrawGeometry(c, br, 1.8f, round);
-        Dc.FillEllipse(new Ellipse(new Vector2(9, 12.4f), .95f, .95f), br); Dc.Transform = Tb;
+        Dc.DrawGeometry(a, br, 2.1f, round); Dc.DrawGeometry(b, br, 2.1f, round); Dc.DrawGeometry(c, br, 2.1f, round);
+        Dc.FillEllipse(new Ellipse(new Vector2(9, 12.4f), 1.1f, 1.1f), br); Dc.Transform = Tb;
     }
     void Cc(float cx, float cy, Color4 fg, Color4 sh)
     {
         Dc.Transform = Matrix3x2.CreateTranslation(cx - 8, cy - 7) * Tb; br.Color = fg;
-        Dc.DrawRoundedRectangle(new RoundedRectangle(new RawRectF(.6f, .6f, 15.4f, 5.8f), 2.6f, 2.6f), br, 1.2f); Dc.FillEllipse(new Ellipse(new Vector2(4, 3.2f), 1.7f, 1.7f), br);
-        Dc.DrawRoundedRectangle(new RoundedRectangle(new RawRectF(.6f, 8.2f, 15.4f, 13.4f), 2.6f, 2.6f), br, 1.2f); Dc.FillEllipse(new Ellipse(new Vector2(12, 10.8f), 1.7f, 1.7f), br);
+        Dc.DrawRoundedRectangle(new RoundedRectangle(new RawRectF(.6f, .6f, 15.4f, 5.8f), 2.6f, 2.6f), br, 1.5f); Dc.FillEllipse(new Ellipse(new Vector2(4, 3.2f), 1.8f, 1.8f), br);
+        Dc.DrawRoundedRectangle(new RoundedRectangle(new RawRectF(.6f, 8.2f, 15.4f, 13.4f), 2.6f, 2.6f), br, 1.5f); Dc.FillEllipse(new Ellipse(new Vector2(12, 10.8f), 1.8f, 1.8f), br);
         Dc.Transform = Tb;
     }
     void Battery(Btn b, Color4 fg)
@@ -157,7 +157,7 @@ class MenuWindow : Surface
         string pct = batPct + "%"; Text(pct, b.X + 8, b.W, false, fg);
         float bx = b.X + b.W - 8 - 27, by = H / 2 - 6.5f;
         Dc.Transform = Matrix3x2.CreateTranslation(bx, by) * Tb;
-        br.Color = new Color4(fg.R, fg.G, fg.B, .5f); Dc.DrawRoundedRectangle(new RoundedRectangle(new RawRectF(.6f, .6f, 23f, 12.4f), 3.5f, 3.5f), br, 1.2f);
+        br.Color = new Color4(fg.R, fg.G, fg.B, .5f); Dc.DrawRoundedRectangle(new RoundedRectangle(new RawRectF(.6f, .6f, 23f, 12.4f), 3.5f, 3.5f), br, 1.5f);
         float lvl = Math.Max(0.07f, batPct / 100f);
         br.Color = charging ? new Color4(.188f, .82f, .345f, 1) : batPct <= 20 ? new Color4(1, .27f, .227f, 1) : fg;
         Dc.FillRoundedRectangle(new RoundedRectangle(new RawRectF(2.2f, 2.2f, 2.2f + 19.2f * lvl, 10.8f), 2.1f, 2.1f), br);

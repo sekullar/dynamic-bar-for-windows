@@ -204,11 +204,31 @@ function wallpaperLum() {
     return wallL;
   } catch { return null; }
 }
+// Barın tam arkasındaki ekran şeridinin parlaklığı (duvar kağıdı + alttaki pencereler). Yazının gezdiği orta satırlar atlanır, yalnızca
+// üst ve alt kenardaki boş satırlar örneklenir; böylece yazının kendisi ölçümü saptırmaz.
+function barLum() {
+  try {
+    const d = display(), sf = d.scaleFactor || 1, o = screen.dipToScreenPoint({ x: d.bounds.x, y: d.bounds.y });
+    const w = Math.round(d.bounds.width * sf), h = Math.round(MENU_H * sf), k = Math.max(2, Math.round(3 * sf)), rows = [];
+    for (let i = 0; i < k; i++) rows.push(i, h - 1 - i);
+    return wl.sampleLum(Math.round(o.x), Math.round(o.y), w, h, rows);
+  } catch { return null; }
+}
+// Yazı rengi geçişi titremesin diye: iki eşik (histerezis) ve art arda 2 aynı ölçüm gerekir
+let lightNow = true, flipN = 0;
+function autoLight() {
+  const l = barLum() ?? wallpaperLum(); // ekran okunamazsa duvar kağıdına düş
+  if (l == null) return lightNow;
+  const want = lightNow ? !(l > 0.52) : l < 0.44; // beyaz yazı: koyu arka plan (orta gri civarında siyah yazı daha okunaklı)
+  if (want === lightNow) { flipN = 0; return lightNow; }
+  if (++flipN >= 2) { lightNow = want; flipN = 0; }
+  return lightNow;
+}
 function pushTheme() {
   const mode = ctx.settings().macMenuText || 'auto';
   let light = true; // true: beyaz yazı
   if (mode === 'black') light = false;
-  else if (mode === 'auto') { const l = wallpaperLum(); light = l == null ? true : l < 0.5; }
+  else if (mode === 'auto') light = autoLight();
   const s = String(light);
   if (s === themeSig) return;
   themeSig = s;
@@ -269,7 +289,7 @@ function stepActivate(w, h) { // yedek: Win+Ctrl+ok ile komşu masaüstlerine te
 function poll() {
   if (!enabled()) return;
   if (tick++ % 2 === 0) { try { if (wl.taskbarVisible()) wl.showTaskbar(false); if (tick % 10 === 1 && !wl.getAutohide()) wl.setAutohide(true); } catch {} }
-  if (tick % 40 === 1) pushTheme();
+  if (tick % 2 === 1 || tick % 40 === 1) pushTheme(); // ~1,4 sn'de bir: pencere ya da duvar kağıdı değişince yazı rengi uyum sağlar
   const me = lc(process.execPath), all = wl.list(), g = new Map();
   winByH.clear(); for (const w of all) winByH.set(String(w.hwnd), w);
   { // büyütülmüş (maximize) pencere var mı: Dock'un koşullu gizlenmesi için

@@ -45,6 +45,9 @@ function init() {
       SelectObject: K.load('gdi32.dll').func('uintptr_t __stdcall SelectObject(uintptr_t dc, uintptr_t obj)'),
       DeleteObject: K.load('gdi32.dll').func('bool __stdcall DeleteObject(uintptr_t obj)'),
       DeleteDC: K.load('gdi32.dll').func('bool __stdcall DeleteDC(uintptr_t dc)'),
+      GetDC: u.func('uintptr_t __stdcall GetDC(uintptr_t h)'),
+      ReleaseDC: u.func('int __stdcall ReleaseDC(uintptr_t h, uintptr_t dc)'),
+      BitBlt: K.load('gdi32.dll').func('bool __stdcall BitBlt(uintptr_t dst, int x, int y, int w, int h, uintptr_t src, int sx, int sy, uint32_t rop)'),
       SendMessageTimeoutStr: u.func('intptr_t __stdcall SendMessageTimeoutW(uintptr_t h, uint32_t msg, uintptr_t w, str16 l, uint32_t flags, uint32_t to, _Out_ uintptr_t *res)'),
       PrivateExtractIconsW: u.func('uint32_t __stdcall PrivateExtractIconsW(str16 file, int idx, int cx, int cy, _Out_ uintptr_t *phicon, _Out_ uint32_t *id, uint32_t n, uint32_t flags)'),
       DestroyIcon: u.func('bool __stdcall DestroyIcon(uintptr_t h)'),
@@ -199,7 +202,36 @@ function setAutohide(on) { // ABM_SETSTATE: otomatik gizle açılınca Windows �
 function showTaskbar(show) { if (!init()) return; for (const h of trays()) f.ShowWindow(h, show ? 5 : 0); }
 function taskbarVisible() { if (!init()) return false; const t = trays(); return t.length > 0 && t.some((h) => f.IsWindowVisible(h)); }
 
+// Ekranın (x, y, w, h) fiziksel piksel dikdörtgenini okuyup `rows` (şerit içindeki satır numaraları) üzerinden ortalama parlaklığı (0..1) döner.
+// CAPTUREBLT verilmediği için katmanlı (layered) pencereler, yani şeffaf bar pencerelerinin kendisi yakalanmaz: yalnızca duvar kağıdı ve
+// alttaki normal pencereler okunur. Hata olursa null.
+function sampleLum(x, y, w, h, rows) {
+  if (!init() || !(w > 0) || !(h > 0) || !rows || !rows.length) return null;
+  const sdc = f.GetDC(0); if (!sdc) return null;
+  const dc = f.CreateCompatibleDC(sdc), bits = [null];
+  const bmp = f.CreateDIBSection(dc, { biSize: 40, biWidth: w, biHeight: -h, biPlanes: 1, biBitCount: 32, biCompression: 0, biSizeImage: 0, x: 0, y: 0, used: 0, imp: 0 }, 0, bits, 0, 0);
+  let out = null;
+  try {
+    if (bmp && bits[0]) {
+      const old = f.SelectObject(dc, bmp);
+      if (f.BitBlt(dc, 0, 0, w, h, sdc, x, y, 0x00CC0020)) { // SRCCOPY
+        const buf = Buffer.from(K.decode(bits[0], 'uint8_t', w * h * 4));
+        let sum = 0, n = 0;
+        for (const r of rows) {
+          if (r < 0 || r >= h) continue;
+          for (let i = r * w * 4, e = i + w * 4; i < e; i += 16) { sum += 0.114 * buf[i] + 0.587 * buf[i + 1] + 0.299 * buf[i + 2]; n++; } // her 4. piksel yeter
+        }
+        if (n) out = sum / n / 255;
+      }
+      f.SelectObject(dc, old);
+    }
+  } catch { out = null; }
+  if (bmp) f.DeleteObject(bmp);
+  f.DeleteDC(dc); f.ReleaseDC(0, sdc);
+  return out;
+}
+
 // tema/ayar değişikliğini tüm pencerelere duyur (ör. 'ImmersiveColorSet': koyu/açık mod)
 function broadcastSetting(name) { if (!init()) return; f.SendMessageTimeoutStr(0xffff, 0x1a, 0, name, 2, 1500, [0]); }
 
-module.exports = { deskKey, init, broadcastSetting, windowIcon, exeIcon, list, foreground, activate, minimize, isZoomed, toggleMaximize, restore, close, startMenu, getAutohide, setAutohide, showTaskbar, taskbarVisible };
+module.exports = { deskKey, init, sampleLum, broadcastSetting, windowIcon, exeIcon, list, foreground, activate, minimize, isZoomed, toggleMaximize, restore, close, startMenu, getAutohide, setAutohide, showTaskbar, taskbarVisible };
